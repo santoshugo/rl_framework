@@ -62,7 +62,7 @@ class DummyEnvironment(GridEnvironment):
 
 
 if __name__ == '__main__':
-    dummy_map_file = 'C:\\Users\\santosh\\PycharmProjects\\rl_framework\\docs\\dummy_map.json'
+    dummy_map_file = '/home/hugo/PycharmProjects/rl_framework/docs/dummy_map.json'
     with open(dummy_map_file) as f:
         env_map = json.load(f)
 

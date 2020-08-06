@@ -3,7 +3,7 @@ implement here functions to help environment/observation logic
 """
 
 
-def shortest_path():
+def dfs(graph, start):
     """
     Computes shortest path in a graph (maybe bidirectional A*?)
     :return:
