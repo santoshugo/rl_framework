@@ -10,3 +10,4 @@ def shortest_path():
     """
     raise NotImplementedError
 
+

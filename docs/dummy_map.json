@@ -3,7 +3,7 @@
     {
       "x": 0,
       "y": 2,
-      "start": 1,
+      "start": 0,
       "destination": null
     },
     {
@@ -52,7 +52,7 @@
       "x": 2,
       "y": 5,
       "start": null,
-      "destination": 1
+      "destination": 0
     }
   ],
   "width": 6,
