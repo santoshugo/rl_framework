@@ -1,6 +1,3 @@
-from rl_framework.environment.utils import dfs
-
-
 class AbstractObservation:
     """
     Abstract class that implements base observation logic and speeds development of project-level observations
@@ -18,25 +15,6 @@ class AbstractObservation:
         :return:
         """
         raise NotImplementedError
-
-
-class LocalSearchObservation(AbstractObservation):
-    """
-    Returns shortest path to destination for each agent
-    """
-    def __init__(self, environment):
-        self.environment = environment
-        self.__precompute()
-
-    def __precompute(self):
-        # check shortes path from all points to all other points
-        shortest_path = dfs(self.environment.transitions)
-
-    def get(self, agent):
-        pass
-
-    def get_all(self):
-        return {agent: self.get(agent) for agent in self.environment.agents}
 
 
 class GlobalObservation(AbstractObservation):

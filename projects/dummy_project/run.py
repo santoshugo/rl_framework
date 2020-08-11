@@ -4,6 +4,7 @@ import numpy as np
 
 from rl_framework.environment.environment import GridEnvironment
 from rl_framework.environment.observation import GlobalObservation
+from rl_framework.environment.utils import bfs
 
 
 class DummyEnvironment(GridEnvironment):
@@ -84,3 +85,9 @@ if __name__ == '__main__':
 
     obs, r = env.step({0: 'N'})
     print(obs, r, env.malfunction)
+
+    print('-----------')
+    print(env.transitions)
+
+    g = {key: list(set(values.values())) for key, values in env.transitions.items()}
+    print(bfs(g, (0, 2)))
