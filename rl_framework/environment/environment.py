@@ -1,4 +1,5 @@
 from copy import deepcopy
+import numpy as np
 
 
 class AbstractEnvironment:
@@ -27,7 +28,7 @@ class GridEnvironment(AbstractEnvironment):
     """
     ACTIONS = {'N': 0, 'E': 1, 'S': 2, 'W': 3, 'P': 4}  # North | East | South | West | Do nothing
 
-    def __init__(self, environment_map, observation_obj):
+    def __init__(self, environment_map, observation_obj, malfunction_prob, malfunction_len):
         """
         Should take in an observation type (to return on step call) and a environment map
         """
@@ -43,6 +44,12 @@ class GridEnvironment(AbstractEnvironment):
 
         self.state = None
         self.no_resets = 0
+
+        self.malfunction = {agent: False for agent in self.agents}
+        self.__time_until_restore = {agent: 0 for agent in self.agents}
+
+        self.malfunction_prob = malfunction_prob
+        self.malfunction_len = malfunction_len
 
     def __build(self):
         """
@@ -71,6 +78,17 @@ class GridEnvironment(AbstractEnvironment):
         self.no_resets += 1
 
         return self.observation.get_all()
+
+    def __break_agent(self, agent):
+        self.malfunction[agent] = True
+        self.malfunction_len[agent] = np.random.poisson(self.malfunction_len) + 1
+
+    def __update_broken_agent(self, agent):
+        self.malfunction_len[agent] -= 1
+
+        if self.malfunction_len[agent] <= 0:
+            self.malfunction[agent] = False
+            self.malfunction_len[agent] = 0
 
     def __update_repr(self):
         raise NotImplementedError
