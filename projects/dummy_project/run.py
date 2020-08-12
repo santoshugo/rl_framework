@@ -2,26 +2,18 @@ import json
 from copy import deepcopy
 import numpy as np
 
-from rl_framework.environment.environment import GridEnvironment
-from rl_framework.environment.observation import GlobalObservation
+from rl_framework.environment.environment import FiniteGridEnvironment
+from rl_framework.environment.observation import GlobalObservation, AbstractObservation
 from rl_framework.environment.utils import bfs
 
 
-class DummyEnvironment(GridEnvironment):
+class DummyEnvironment(FiniteGridEnvironment):
     def __init__(self, environment_map, observation_obj, malfunction_prob=0.05, malfunction_len=1):
         super().__init__(environment_map, observation_obj, malfunction_prob, malfunction_len)
 
         self.initial_representation = np.array([[' X ' for _ in range(self.width)] for _ in range(self.height)])
         for x, y in self.transitions.keys():
             self.initial_representation[self.height - 1 - y][x] = '   '
-
-        self.destination = {}
-        for s in self.environment:
-            if s['destination'] is not None:
-                self.destination[s['destination']] = (s['x'], s['y'])
-
-        self.done = {agent: False for agent in self.agents}
-        self.done['__all__'] = False
 
     def step(self, actions):
         if self.no_resets == 0:
@@ -48,7 +40,7 @@ class DummyEnvironment(GridEnvironment):
             if not self.done[agent]:
                 self.state[agent] = self.transitions[self.state[agent]][self.ACTIONS[action]]
 
-            if self.state[agent] == self.destination[agent] and not self.done[agent]:
+            if self.state[agent] == self.terminal_position[agent] and not self.done[agent]:
                 reward[agent] = 1
             elif self.done[agent]:
                 reward[agent] = 0
@@ -71,12 +63,35 @@ class DummyEnvironment(GridEnvironment):
         return str(self.representation)
 
 
+class ShortestPathObservation(AbstractObservation):
+    def __init__(self, environment):
+        self.environment = environment
+        self.graph = {state: list(set(action_s_prime.values())) for state, action_s_prime in self.environment.transitions.items()}
+
+        self.shortest_path = {agent: bfs(self.graph, self.environment.terminal_position[agent]) for agent in self.environment.agents}
+
+    def get(self, agent):
+        state = self.environment.state[agent]
+        shortest_path = [state]
+        while True:
+            state = self.shortest_path[agent][state]
+            shortest_path.append(state)
+
+            if state == self.environment.terminal_position[agent]:
+                break
+
+        return shortest_path
+
+    def get_all(self):
+        return {agent: self.get(agent) for agent in self.environment.agents}
+
+
 if __name__ == '__main__':
     dummy_map_file = '/home/hugo/PycharmProjects/rl_framework/docs/dummy_map.json'
     with open(dummy_map_file) as f:
         env_map = json.load(f)
 
-    env = DummyEnvironment(env_map, GlobalObservation)
+    env = DummyEnvironment(env_map, ShortestPathObservation)
     obs = env.reset()
     print(obs, env.malfunction)
 
@@ -90,4 +105,3 @@ if __name__ == '__main__':
     print(env.transitions)
 
     g = {key: list(set(values.values())) for key, values in env.transitions.items()}
-    print(bfs(g, (0, 2)))

@@ -3,7 +3,7 @@ implement here functions to help environment/observation logic
 """
 
 
-def bfs(graph: dict, start):
+def bfs(graph, start):
     """
     Computes shortest path in a graph using breadth first search
     :return:

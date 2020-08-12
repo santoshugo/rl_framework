@@ -1,2 +1,6 @@
 
 *.pdf
+
+rl_framework/environment/__pycache__/
+
+*.pyc
