@@ -3,10 +3,25 @@ implement here functions to help environment/observation logic
 """
 
 
-def shortest_path():
+def bfs(graph: dict, start):
     """
-    Computes shortest path in a graph (maybe bidirectional A*?)
+    Computes shortest path in a graph using breadth first search
     :return:
     """
-    raise NotImplementedError
+    queue = [start]
+    discovered = {start}
+    parents = dict()
+
+    while queue:
+        v = queue.pop(0)
+        for w in graph[v]:
+            if w not in discovered:
+                discovered.add(w)
+                parents[w] = v
+                queue.append(w)
+
+    return parents
+
+
+
 
