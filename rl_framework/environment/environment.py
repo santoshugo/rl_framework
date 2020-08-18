@@ -1,5 +1,6 @@
 from copy import deepcopy
 import numpy as np
+import networkx as nx
 
 
 class AbstractEnvironment:
@@ -225,8 +226,22 @@ class InfiniteGraphEnvironment(AbstractEnvironment):
         self.directed = environment_map['directed']
         self.no_agents = environment_map['no_agents']
 
+        self.graph = nx.Graph()
+        self._create_graph()
+
     def _create_graph(self):
-        pass
+        import matplotlib.pyplot as plt
+
+        for node in self.nodes:
+            node_id = node.pop('id')
+            self.graph.add_node(node_id, **node)
+
+        for edge in self.edges:
+            node_1 = edge.pop('node_1')
+            node_2 = edge.pop('node_2')
+
+            self.graph.add_edge(node_1, node_2, **edge)
+
 
     def reset(self):
         pass
