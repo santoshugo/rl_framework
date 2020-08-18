@@ -4,6 +4,7 @@ import numpy as np
 
 from rl_framework.environment.environment import FiniteGridEnvironment
 from rl_framework.environment.observation import GlobalObservation, AbstractObservation
+from rl_framework.solver.agent import AbstractAgent
 from rl_framework.environment.utils import bfs
 
 
@@ -86,8 +87,23 @@ class ShortestPathObservation(AbstractObservation):
         return {agent: self.get(agent) for agent in self.environment.agents}
 
 
+class GridAgent(AbstractAgent):
+    def __init__(self, id, initial_state):
+        super().__init__(id, initial_state)
+        self.option = None
+
+    def option_to_action(self):
+        raise NotImplementedError
+
+    def get_valid_options(self, state):
+       pass
+
+    def set_option(self, option):
+        self.option = option
+
+
 if __name__ == '__main__':
-    dummy_map_file = '/home/hugo/PycharmProjects/rl_framework/docs/dummy_map.json'
+    dummy_map_file = '/docs/maps/dummy_map.json'
     with open(dummy_map_file) as f:
         env_map = json.load(f)
 

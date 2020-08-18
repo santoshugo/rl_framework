@@ -197,6 +197,12 @@ class FiniteGraphEnvironment(AbstractEnvironment):
     def __init__(self, environment_map, observation_obj):
         self.env_type = 'finite_graph'
 
+        self.nodes = environment_map['nodes']
+        self.edges = environment_map['edges']
+
+        self.directed = environment_map['directed']
+        self.no_agents = environment_map['no_agents']
+
     def reset(self):
         pass
 
@@ -212,6 +218,15 @@ class InfiniteGraphEnvironment(AbstractEnvironment):
 
     def __init__(self, environment_map, observation_obj):
         self.env_type = 'infinite_grid'
+
+        self.nodes = environment_map['nodes']
+        self.edges = environment_map['edges']
+
+        self.directed = environment_map['directed']
+        self.no_agents = environment_map['no_agents']
+
+    def _create_graph(self):
+        pass
 
     def reset(self):
         pass

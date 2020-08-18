@@ -4,7 +4,7 @@
       "x": 0,
       "y": 2,
       "start": 0,
-      "destination": null
+      "destination": 1
     },
     {
       "x": 1,
@@ -37,8 +37,26 @@
       "destination": null
     },
     {
-      "x": 2,
+      "x": 6,
+      "y": 2,
+      "start": null,
+      "destination": null
+    },
+    {
+      "x": 7,
+      "y": 2,
+      "start": 1,
+      "destination": 0
+    },
+    {
+      "x": 1,
       "y": 3,
+      "start": null,
+      "destination": null
+    },
+    {
+      "x": 1,
+      "y": 4,
       "start": null,
       "destination": null
     },
@@ -49,13 +67,37 @@
       "destination": null
     },
     {
-      "x": 2,
-      "y": 5,
+      "x": 3,
+      "y": 4,
       "start": null,
-      "destination": 0
+      "destination": null
+    },
+    {
+      "x": 4,
+      "y": 4,
+      "start": null,
+      "destination": null
+    },
+    {
+      "x": 5,
+      "y": 6,
+      "start": null,
+      "destination": null
+    },
+    {
+      "x": 6,
+      "y": 4,
+      "start": null,
+      "destination": null
+    },
+    {
+      "x": 6,
+      "y": 3,
+      "start": null,
+      "destination": null
     }
   ],
-  "width": 6,
-  "height": 6,
+  "width": 8,
+  "height": 5,
   "no_agents": 1
 }

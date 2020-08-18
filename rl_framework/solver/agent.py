@@ -7,12 +7,16 @@ class AbstractAgent:
     - Applies atomic action to environment;
     - Communicates with manager.
     """
-    def __init__(self, initial_state):
+    def __init__(self, id, initial_state):
+        self.id = id
         self.initial_state = initial_state
 
     def option_to_action(self):
         raise NotImplementedError
 
     def get_valid_options(self, state):
+        raise NotImplementedError
+
+    def set_option(self, option):
         raise NotImplementedError
 
