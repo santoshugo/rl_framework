@@ -1,25 +1,21 @@
 import json
 
-from rl_framework.environment.environment import AbstractEnvironment, InfiniteGraphEnvironment
+from rl_framework.environment.environment import InfiniteGraphEnvironment
 from rl_framework.environment.observation import AbstractObservation
 
 
 class Environment(InfiniteGraphEnvironment):
-    def __init__(self, environment_map, observation_obj):
-        super().__init__(environment_map, observation_obj)
+    def __init__(self, environment_map, observation_obj, initial_state):
+        super().__init__(environment_map, observation_obj, initial_state, malfunction_len=0, malfunction_prob=0)
 
     def step(self, actions):
         observation, reward = None, None
         return observation, reward
 
-    def reset(self):
-        observation = None
-        return observation
-
 
 class Observation(AbstractObservation):
-    def __init__(self):
-        pass
+    def __init__(self, environment):
+        self.environment = environment
 
     def get(self, agent):
         pass
@@ -33,12 +29,13 @@ if __name__ == '__main__':
     with open(map_file) as f:
         env_map = json.load(f)
 
-    env = Environment(env_map, Observation)
-    print(env.graph.number_of_nodes())
-    print(env.graph.nodes.data())
-    print(env.graph.edges.data())
+    initial_node = {0: 1}
 
+    env = Environment(env_map, Observation, initial_node)
+
+    print(env.graph.nodes.data())
 
     obs = env.reset()
+    print(env.graph.nodes.data())
 
     obs, r = env.step({0: 'action'})

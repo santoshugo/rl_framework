@@ -195,7 +195,7 @@ class FiniteGraphEnvironment(AbstractEnvironment):
     Inputs may be defined either programmatically or graphically.
     """
 
-    def __init__(self, environment_map, observation_obj):
+    def __init__(self, environment_map, observation_obj, initial_state, malfunction_prob, malfunction_len):
         self.env_type = 'finite_graph'
 
         self.nodes = environment_map['nodes']
@@ -203,12 +203,66 @@ class FiniteGraphEnvironment(AbstractEnvironment):
 
         self.directed = environment_map['directed']
         self.no_agents = environment_map['no_agents']
+        self.agents = {agent for agent in range(self.no_agents)}
+
+        self.initial_state = initial_state
+
+        self.graph = nx.Graph()
+        self._create_graph()
+
+        self.observation = observation_obj(self)
+
+        self.state = None
+        self.no_resets = 0
+
+        self.done = {agent: False for agent in self.agents}
+        self.done['__all__'] = False
+
+        self.malfunction = {agent: False for agent in self.agents}
+        self.__time_until_restore = {agent: 0 for agent in self.agents}
+
+        self.malfunction_prob = malfunction_prob
+        self.malfunction_len = malfunction_len
+
+    def _create_graph(self):
+
+        for node in self.nodes:
+            node_id = node.pop('id')
+            self.graph.add_node(node_id, **node)
+            self.graph.nodes[node_id]['agent'] = None
+
+        for edge in self.edges:
+            node_1 = edge.pop('node_1')
+            node_2 = edge.pop('node_2')
+
+            self.graph.add_edge(node_1, node_2, **edge)
 
     def reset(self):
-        pass
+        nx.set_node_attributes(self.graph, None, 'agent')
+
+        for agent, node in self.initial_state:
+            self.graph.nodes[node]['agent'] = agent
+
+        self.no_resets += 1
+
+        self.done = {agent: False for agent in self.agents}
+        self.done['__all__'] = False
+
+        return self.observation.get_all()
+
+    def __break_agent(self, agent):
+        self.malfunction[agent] = True
+        self.malfunction_len[agent] = np.random.poisson(self.malfunction_len) + 1
+
+    def __update_broken_agent(self, agent):
+        self.malfunction_len[agent] -= 1
+
+        if self.malfunction_len[agent] <= 0:
+            self.malfunction[agent] = False
+            self.malfunction_len[agent] = 0
 
     def step(self, actions):
-        pass
+        raise NotImplementedError
 
 
 class InfiniteGraphEnvironment(AbstractEnvironment):
@@ -217,7 +271,7 @@ class InfiniteGraphEnvironment(AbstractEnvironment):
     Inputs may be defined either programmatically or graphically.
     """
 
-    def __init__(self, environment_map, observation_obj):
+    def __init__(self, environment_map, observation_obj, initial_state, malfunction_prob, malfunction_len):
         self.env_type = 'infinite_grid'
 
         self.nodes = environment_map['nodes']
@@ -225,16 +279,30 @@ class InfiniteGraphEnvironment(AbstractEnvironment):
 
         self.directed = environment_map['directed']
         self.no_agents = environment_map['no_agents']
+        self.agents = {agent for agent in range(self.no_agents)}
+
+        self.initial_state = initial_state
 
         self.graph = nx.Graph()
         self._create_graph()
 
+        self.observation = observation_obj(self)
+
+        self.state = None
+        self.no_resets = 0
+
+        self.malfunction = {agent: False for agent in self.agents}
+        self.__time_until_restore = {agent: 0 for agent in self.agents}
+
+        self.malfunction_prob = malfunction_prob
+        self.malfunction_len = malfunction_len
+
     def _create_graph(self):
-        import matplotlib.pyplot as plt
 
         for node in self.nodes:
             node_id = node.pop('id')
             self.graph.add_node(node_id, **node)
+            self.graph.nodes[node_id]['agent'] = None
 
         for edge in self.edges:
             node_1 = edge.pop('node_1')
@@ -242,9 +310,26 @@ class InfiniteGraphEnvironment(AbstractEnvironment):
 
             self.graph.add_edge(node_1, node_2, **edge)
 
-
     def reset(self):
-        pass
+        nx.set_node_attributes(self.graph, None, 'agent')
+
+        for agent, node in self.initial_state.items():
+            print(agent, node)
+            self.graph.nodes[node]['agent'] = agent
+
+        self.no_resets += 1
+        return self.observation.get_all()
+
+    def __break_agent(self, agent):
+        self.malfunction[agent] = True
+        self.malfunction_len[agent] = np.random.poisson(self.malfunction_len) + 1
+
+    def __update_broken_agent(self, agent):
+        self.malfunction_len[agent] -= 1
+
+        if self.malfunction_len[agent] <= 0:
+            self.malfunction[agent] = False
+            self.malfunction_len[agent] = 0
 
     def step(self, actions):
-        pass
+        raise NotImplementedError
