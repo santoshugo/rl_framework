@@ -3,10 +3,12 @@ import numpy as np
 
 from rl_framework.environment.environment import GraphEnvironment
 from rl_framework.environment.observation import GlobalObservation, AbstractObservation
-from rl_framework.solver.actions import Option
+from rl_framework.solver.agent import AbstractAgent
 
 
 class ZalandoEnvironment(GraphEnvironment):
+    ACTIONS = {'charge': 0, 'move': 1}
+
     def __init__(self, environment_map, observation_obj, initial_state, pickup_refill_probability):
         super().__init__(environment_map, observation_obj, initial_state, malfunction_prob=0, malfunction_len=0)
 
@@ -14,7 +16,20 @@ class ZalandoEnvironment(GraphEnvironment):
         self.pickup_carts = {pickup: 5 for pickup in pickup_refill_probability.keys()}
 
     def step(self, actions):
-        pass
+        if self.no_resets == 0:
+            raise Exception('Initial environment reset is required')
+
+        reward = {}
+
+        for agent, action in actions.items():
+            pass
+            # if action == pass and agent at charging station
+
+            # if action == edge and agent at node
+
+            # if action == pickup / dropdown and agent at node
+
+            # if action == move and agent at edge
 
     def refill_pickup(self):
         for pickup in self.pickup_carts.keys():
@@ -39,13 +54,15 @@ class ZalandoObservation(AbstractObservation):
         pass
 
 
-class ZalandoOption(Option):
-    def __init__(self):
-        super().__init__()
+class ZalandoAgent(AbstractAgent):
+    def __init__(self, id, initial_state, speed, battery_decay_function):
+        super().__init__(id, initial_state)
+        self.speed = speed
+        self.battery_decay_function = battery_decay_function
 
 
 if __name__ == '__main__':
-    dummy_map_file = '/home/hugo/PycharmProjects/rl_framework/docs/maps/dummy_map_2.json'
+    dummy_map_file = 'C:\\Users\\santosh\\PycharmProjects\\rl_framework\\docs\\maps\\dummy_map_2.json'
     with open(dummy_map_file) as f:
         env_map = json.load(f)
 
@@ -66,7 +83,11 @@ if __name__ == '__main__':
     env = ZalandoEnvironment(env_map, GlobalObservation, initial_nodes, pickup_refill)
     obs = env.reset()
 
-    print(env.graph.nodes.data())
-    print(env.graph.edges.data())
+    agents = {agent: ZalandoAgent(agent) for agent in env.agents}
+
+    print(type(env.graph.nodes[0]))
+    print(type(env.graph.edges[0, 1]))
+
+    obs, reward = env.step()
 
     print(obs, env.malfunction)

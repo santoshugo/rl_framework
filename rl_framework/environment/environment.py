@@ -33,8 +33,6 @@ class GridEnvironment(AbstractEnvironment):
         """
         Should take in an observation type (to return on step call) and a environment map
         """
-        self.env_type = 'finite_grid'
-
         self.width = environment_map['width']
         self.height = environment_map['height']
         self.no_agents = environment_map['no_agents']
@@ -118,8 +116,6 @@ class GraphEnvironment(AbstractEnvironment):
     """
 
     def __init__(self, environment_map, observation_obj, initial_state, malfunction_prob, malfunction_len):
-        self.env_type = 'infinite_grid'
-
         self.nodes = environment_map['nodes']
         self.edges = environment_map['edges']
 
@@ -129,6 +125,7 @@ class GraphEnvironment(AbstractEnvironment):
 
         self.initial_state = initial_state
         self.state = {agent: None for agent in self.agents}
+        self.state_type = {agent: None for agent in self.agents}
 
         self.graph = nx.Graph()
         self._create_graph()
@@ -174,6 +171,7 @@ class GraphEnvironment(AbstractEnvironment):
         for agent, node in self.initial_state.items():
             self.graph.nodes[node]['agent'] = agent
             self.state[agent] = self.graph.nodes[node]
+            self.state_type[agent] = 'node'
 
         self.no_resets += 1
 
