@@ -2,13 +2,13 @@ import json
 from copy import deepcopy
 import numpy as np
 
-from rl_framework.environment.environment import FiniteGridEnvironment
+from rl_framework.environment.environment import GridEnvironment
 from rl_framework.environment.observation import GlobalObservation, AbstractObservation
 from rl_framework.solver.agent import AbstractAgent
 from rl_framework.environment.utils import bfs
 
 
-class DummyEnvironment(FiniteGridEnvironment):
+class DummyEnvironment(GridEnvironment):
     def __init__(self, environment_map, observation_obj, malfunction_prob=0.05, malfunction_len=1):
         super().__init__(environment_map, observation_obj, malfunction_prob, malfunction_len)
 
@@ -72,7 +72,7 @@ class ShortestPathObservation(AbstractObservation):
         self.shortest_path = {agent: bfs(self.graph, self.environment.terminal_position[agent]) for agent in self.environment.agents}
 
     def get(self, agent):
-        state = self.environment.state[agent]
+        state = self.environment.graph[agent]
         shortest_path = [state]
         while True:
             state = self.shortest_path[agent][state]

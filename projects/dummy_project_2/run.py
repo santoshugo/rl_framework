@@ -1,82 +1,72 @@
 import json
-from copy import deepcopy
 import numpy as np
 
-from rl_framework.environment.environment import InfiniteGridEnvironment
-from rl_framework.environment.observation import GlobalObservation
+from rl_framework.environment.environment import GraphEnvironment
+from rl_framework.environment.observation import GlobalObservation, AbstractObservation
+from rl_framework.solver.actions import Option
 
 
-class ZalandoEnvironment(InfiniteGridEnvironment):
-    def __init__(self, environment_map, observation_obj, start='full'):
-        super().__init__(environment_map, observation_obj, malfunction_prob=0, malfunction_len=0)
+class ZalandoEnvironment(GraphEnvironment):
+    def __init__(self, environment_map, observation_obj, initial_state, pickup_refill_probability):
+        super().__init__(environment_map, observation_obj, initial_state, malfunction_prob=0, malfunction_len=0)
 
-    def __build(self):
-        self.pickup_full_1 = None
-        self.pickup_full_2 = None
-        self.pickup_full_3 = None
+        self.pickup_refill_probability = pickup_refill_probability
+        self.pickup_carts = {pickup: 5 for pickup in pickup_refill_probability.keys()}
 
-        self.pickup_empty_1 = None
-        self.pickup_empty_2 = None
+    def step(self, actions):
+        pass
 
-        self.drop_full_zone = None
-        self.drop_empty_zone = None
+    def refill_pickup(self):
+        for pickup in self.pickup_carts.keys():
+            no_vacancies = 5 - self.pickup_carts[pickup]
+            additional_carts = 0
 
-        self.charging_station_zones = []
+            for _ in range(no_vacancies):
+                if np.random.random() < self.pickup_refill_probability[pickup]:
+                    additional_carts += 1
 
-        for s in self.environment:
-            if s['pickup_full_1']:
-                self.pickup_full_1 = (s['x'], s['y'])
-            if s['pickup_full_2']:
-                self.pickup_full_2 = (s['x'], s['y'])
-            if s['pickup_full_3']:
-                self.pickup_full_3 = (s['x'], s['y'])
-            if s['pickup_empty_1']:
-                self.pickup_empty_1 = (s['x'], s['y'])
-            if s['pickup_empty_2']:
-                self.pickup_empty_2 = (s['x'], s['y'])
-            if s['drop_full']:
-                self.drop_full_zone = (s['x'], s['y'])
-            if s['drop_empty']:
-                self.drop_empty_zone = (s['x'], s['y'])
-            if s['charging_station']:
-                self.charging_station_zones.append((s['x'], s['y']))
-
-        self.initial_position = {}
-        for agent in range(5):
-            self.initial_position[agent] = self.charging_station_zones[0]
-        for agent in range(5, 10):
-            self.initial_position[agent] = self.charging_station_zones[1]
-
-        possible_positions = {(s['x'], s['y']) for s in self.environment}
-        self.transitions = {}
-        for pos in possible_positions:
-            x, y = pos
-            self.transitions[pos] = {}
-
+            self.pickup_carts[pickup] += additional_carts
 
     def __update_repr(self):
         pass
 
-    def step(self, actions):
-        raise NotImplementedError
+
+class ZalandoObservation(AbstractObservation):
+    def get(self, agent):
+        pass
+
+    def get_all(self):
+        pass
+
+
+class ZalandoOption(Option):
+    def __init__(self):
+        super().__init__()
 
 
 if __name__ == '__main__':
-    dummy_map_file = '/docs/maps/dummy_map_2.json'
+    dummy_map_file = '/home/hugo/PycharmProjects/rl_framework/docs/maps/dummy_map_2.json'
     with open(dummy_map_file) as f:
         env_map = json.load(f)
 
-    env = ZalandoEnvironment(env_map, GlobalObservation)
+    # refills each cart with probability 1 / n
+    pickup_refill = {'pickup full 1': 20, 'pickup full 2': 20, 'pickup full 3': 20, 'pickup empty 1': 20, 'pickup empty 2': 20}
+
+    initial_nodes = {0: 1,
+                     1: 1,
+                     2: 1,
+                     3: 1,
+                     4: 1,
+                     5: 5,
+                     6: 5,
+                     7: 5,
+                     8: 5,
+                     9: 5}
+
+    env = ZalandoEnvironment(env_map, GlobalObservation, initial_nodes, pickup_refill)
     obs = env.reset()
+
+    print(env.graph.nodes.data())
+    print(env.graph.edges.data())
+
     print(obs, env.malfunction)
-
-    obs, r = env.step({0: 'E'})
-    print(obs, r, env.malfunction)
-
-    obs, r = env.step({0: 'N'})
-    print(obs, r, env.malfunction)
-
-    print('-----------')
-    print(env.transitions)
-
-    g = {key: list(set(values.values())) for key, values in env.transitions.items()}

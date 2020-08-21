@@ -1,10 +1,10 @@
 import json
 
-from rl_framework.environment.environment import InfiniteGraphEnvironment
+from rl_framework.environment.environment import GraphEnvironment
 from rl_framework.environment.observation import AbstractObservation
 
 
-class Environment(InfiniteGraphEnvironment):
+class Environment(GraphEnvironment):
     def __init__(self, environment_map, observation_obj, initial_state):
         super().__init__(environment_map, observation_obj, initial_state, malfunction_len=0, malfunction_prob=0)
 
