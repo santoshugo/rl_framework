@@ -11,12 +11,4 @@ class AbstractAgent:
         self.id = id
         self.initial_state = initial_state
 
-    def option_to_action(self):
-        raise NotImplementedError
-
-    def get_valid_options(self, state):
-        raise NotImplementedError
-
-    def set_option(self, option):
-        raise NotImplementedError
 

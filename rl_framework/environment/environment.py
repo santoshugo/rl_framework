@@ -112,14 +112,14 @@ class GridEnvironment(AbstractEnvironment):
 class GraphEnvironment(AbstractEnvironment):
     """
     Abstract class that implements graph-like environment logic and speeds development of project-level environments.
-    Inputs may be defined either programmatically or graphically.
+    Inputs may be defined either programmatically or (in the future) graphically.
     """
 
     def __init__(self, environment_map, observation_obj, initial_state, malfunction_prob, malfunction_len):
         self.nodes = environment_map['nodes']
         self.edges = environment_map['edges']
 
-        self.directed = environment_map['directed']
+        self.directed = environment_map['directed']  # not yet implemented
         self.no_agents = environment_map['no_agents']
         self.agents = {agent for agent in range(self.no_agents)}
 
@@ -127,7 +127,11 @@ class GraphEnvironment(AbstractEnvironment):
         self.state = {agent: None for agent in self.agents}
         self.state_type = {agent: None for agent in self.agents}
 
-        self.graph = nx.Graph()
+        if self.directed:
+            self.graph = nx.DiGraph()
+        else:
+            self.graph = nx.Graph()
+
         self._create_graph()
 
         self.observation = observation_obj(self)
