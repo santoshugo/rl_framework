@@ -1,0 +1,40 @@
+{
+  "nodes": [
+    {
+      "id": 0,
+      "x": 0,
+      "y": 0,
+      "type": "supplier",
+      "products": {"banana": 100000, "orange":500}
+    },
+    {
+      "id": 1,
+      "x": 0,
+      "y": 1,
+      "attr_1": 2,
+      "attr_2": null
+    },
+    {
+      "id": 2,
+      "x": 2,
+      "y": 1,
+      "attr_1": null,
+      "attr_2": null
+    }
+  ],
+  "edges": [
+    {
+      "node_1": 0,
+      "node_2": 1,
+      "attr_1": 5
+    },
+    {
+      "node_1": 1,
+      "node_2": 2,
+      "attr_1": null
+    }
+
+  ],
+  "directed": false,
+  "no_agents": 1
+}
