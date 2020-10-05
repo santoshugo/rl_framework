@@ -52,8 +52,7 @@ class ZalandoEnvironment(GraphEnvironment):
             # agent charging
             elif action == -1:
                 self.charging_station_carts[state].add(agent_no)
-                import pandas as pd
-                pd.Series().rank()
+
                 if len(self.charging_station_carts[state]) > 5:
                     reward[agent_no] = REWARDS['penalty']
                 else:
@@ -226,11 +225,18 @@ if __name__ == '__main__':
 
     env = ZalandoEnvironment(env_map, agents, ZalandoObservation, initial_nodes, pickup_refill)
     obs = env.reset()
-    print(obs)
 
     actions = {0: 0, 1: 2, 3: -1, 4: -1, 5: 4, 6: -1, 7: -1, 8: -1, 9: -1}
-
     obs, reward = env.step(actions)
 
     print(obs)
     print(reward)
+    print('\n')
+
+    actions = {0: -2, 1: -2, 3: -1, 4: -1, 5: 4, 6: -1, 7: -1, 8: -1, 9: -1}
+    for k in range(100):
+        obs, reward = env.step(actions)
+
+        print(obs)
+        print(reward)
+        print('\n')

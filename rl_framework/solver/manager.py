@@ -6,17 +6,17 @@ class Manager:
     - Detects any conflict caused by agent-level policy;
     - Breaks options;
     """
-    def __init__(self, env, agent_class, options_class):
-        self.agents = {agent: agent_class() for agent in range(env.agents)}
-        self.options = {agent: options_class(agent) for agent in range(env.agents)}
-
-        self.__build_initial_value_function()
-
-    def __build_initial_value_function(self):
-        raise NotImplementedError
+    def __init__(self, environment, agents, model):
+        self.environment = environment
+        self.agents = agents
+        self.model = model
 
     def learn(self):
         raise NotImplementedError
 
-    def act(self):
+    def get_actions(self):
         raise NotImplementedError
+
+
+class ApproximationModel:
+    pass
