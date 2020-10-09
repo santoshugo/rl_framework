@@ -1,6 +1,8 @@
 import numpy as np
-import networkx as nx
+from typing import Dict
 
+from projects.dummy_project_2.utils import create_graph
+from projects.dummy_project_2.agent import ZalandoAgent
 
 ACTIONS = {'charge': -1, 'move': -2, 'pick': -3, 'drop': -4}
 PICKUP_FULL = {6, 7, 8}
@@ -13,15 +15,19 @@ REWARDS = {'penalty': -np.inf, 'charge': 0.1, 'pickup': 10, 'dropdown': 100, 'mo
 
 
 class ZalandoEnvironment:
-    def __init__(self, environment_map, agents, initial_state, observation_obj, pickup_refill_probability):
 
-        self.graph = Graph(environment_map).graph
+    def __init__(self, environment_map, agents: Dict[int, ZalandoAgent], initial_state: Dict[int, tuple], observation_obj, pickup_refill_probability):
+
+        self.graph = create_graph(environment_map)
 
         self.agents = agents
         self.initial_state = initial_state
 
         self.observation = observation_obj(self)
         self.agents = agents
+
+        for id, agent in self.agents.items():
+            agent.set_available_options(self.graph)
 
         self.pickup_refill_probability = pickup_refill_probability
 
@@ -31,6 +37,10 @@ class ZalandoEnvironment:
         self.no_resets = 0
 
     def reset(self):
+        """
+        Resets environment to initial state
+        :return:
+        """
         for key, value in self.initial_state.items():
             self.agents[key].state = value[0]
             self.agents[key].state_type = value[1]
@@ -44,48 +54,76 @@ class ZalandoEnvironment:
 
         self.no_resets += 1
 
-    def step(self, actions):
+        return self.observation.get_all()
+
+    def step(self, options: dict):
+        """
+        Advances one time step on the environment. Returns env observation and (reward, option length) for agent
+        on option finish.
+        :param options:
+        :return:
+        """
         if self.no_resets == 0:
             raise Exception('Initial environment reset is required')
 
+        # refill pickup nodes
         self.refill_pickup()
 
         reward = {}
 
-        for agent_no, action in actions.items():
-            agent = self.agents[agent_no]
-            state = agent.state
-            state_type = agent.state_type
+        for agent_no, agent in self.agents.items():
 
+            state, state_type = agent.state, agent.state_type
+
+            # if no option is active raises an error
+            if (agent.option is None or len(agent.action_sequence) == 0) and agent_no not in options.keys():
+                raise Exception('No option is defined for agent {}'.format(agent_no))
+
+            # if option is invalid, penalizes agent and nothing happens
+            if agent_no in options.keys():
+                option = options[agent_no]
+                if option is None and option not in agent.get_available_options():
+                    reward[agent_no] = (REWARDS['penalty'], 0)
+                    continue
+                else:
+                    agent.set_option(option)
+
+            action = agent.next_action()
+
+            # if agent has no battery penalizes agent and returns it to a random charging station
             if action != -1:
                 agent.decay()
                 if agent.battery <= 0:
-                    reward[agent_no] = REWARDS['penalty']
+                    reward[agent_no] = (REWARDS['penalty'], 0)
+
+                    station = 1 if len(self.charging_station_carts[1]) < 5 else 5
+                    self.charging_station_carts[station].add(agent_no)
+                    agent.set_state(station, 'node')
+
                     continue
 
-            if action not in agent.get_available_actions():
-                reward[agent_no] = REWARDS['penalty']
-
             # agent charging
-            elif action == -1:
+            if action == -1:
                 self.charging_station_carts[state].add(agent_no)
 
                 if len(self.charging_station_carts[state]) > 5:
-                    reward[agent_no] = REWARDS['penalty']
+                    reward[agent_no] = (REWARDS['penalty'], 0)
                 else:
                     agent.charge()
                     if agent.charge == 1:
-                        reward[agent_no] = 0
+                        reward[agent_no] = (0, 0)
                     else:
-                        reward[agent_no] = REWARDS['charge']
+                        reward[agent_no] = (REWARDS['charge'], 0)
 
             # agent picking up
             elif action == -3:
-                if self.pickup_carts[state] == 0:
-                    reward[agent_no] = REWARDS['penalty']
+                # agent is penalized if no cart is present or is already carrying something
+                if self.pickup_carts[state] == 0 or agent.carrying_full or agent.carrying_empty:
+                    reward[agent_no] = (REWARDS['penalty'], 0)
                 else:
                     self.pickup_carts[state] -= 1
-                    reward[agent_no] = REWARDS['pickup']
+                    reward[agent_no] = (REWARDS['pickup'], 0)
+
                     if state in PICKUP_FULL:
                         agent.carrying_full = True
                     else:
@@ -93,28 +131,30 @@ class ZalandoEnvironment:
 
             # agent dropping
             elif action == -4:
-                reward[agent_no] = REWARDS['dropdown']
-                agent.carrying_full = False
-                agent.carrying_empty = False
+                # agent is penalized if it is not carrying anything
+                if not agent.carrying_full and not agent.carrying_empty:
+                    reward[agent_no] = (REWARDS['penalty'], 0)
+                else:
+                    reward[agent_no] = (REWARDS['dropdown'], 0)
+                    agent.carrying_full = False
+                    agent.carrying_empty = False
 
-            # moves to node
-            elif action >= 0:
-                reward[agent_no] = REWARDS['move']
-
-                agent.set_node(action, self.graph.edges[state, action]['distance'])
-                agent.add_distance()
-
-            # moves in edge
-            elif action == -2:
-                reward[agent_no] = REWARDS['move']
-                agent.add_distance()
-
-                if agent.distance_to_node <= 0:
-                    agent.reset_node()
+            else:
+                if agent.action_sequence is None:
+                    reward[agent_no] = (REWARDS['move'], agent.option_len)
+                    agent.state = action
+                    agent.state_type = 'node'
+                else:
+                    agent.state = agent.option
+                    agent.state_type = 'edge'
 
         return self.observation.get_all(), reward
 
     def refill_pickup(self):
+        """
+        Refills pickup spaces
+        :return:
+        """
         for pickup in self.pickup_carts.keys():
             no_vacancies = 5 - self.pickup_carts[pickup]
             additional_carts = 0
@@ -125,57 +165,18 @@ class ZalandoEnvironment:
 
             self.pickup_carts[pickup] += additional_carts
 
-    def __update_repr(self):
-        pass
-
-
-class Graph:
-    def __init__(self, map):
-        self.nodes = map['nodes']
-        self.edges = map['edges']
-
-        self.directed = map['directed']
-
-        if self.directed:
-            self.graph = nx.DiGraph()
-        else:
-            self.graph = nx.Graph()
-
-        self._create_graph()
-
-    def _create_graph(self):
-
-        for node in self.nodes:
-            node_id = node.pop('id')
-            self.graph.add_node(node_id, **node)
-            self.graph.nodes[node_id]['agent'] = None
-
-        for edge in self.edges:
-            node_1 = edge.pop('node_1')
-            node_2 = edge.pop('node_2')
-
-            distance = self._compute_distance(node_1, node_2)
-
-            self.graph.add_edge(node_1, node_2, agent=None, distance=distance, **edge)
-
-    def _compute_distance(self, node_1, node_2):
-
-        x_diff = self.graph.nodes[node_1]['x'] - self.graph.nodes[node_2]['x']
-        y_diff = self.graph.nodes[node_1]['y'] - self.graph.nodes[node_2]['y']
-
-        return np.sqrt(np.square(x_diff) + np.square(y_diff))
-
 
 class ZalandoObservation:
     def __init__(self, environment):
         self.env = environment
+        self.agents = environment.agents
 
     def get(self, agent):
-        return agent.state, agent.state_type, agent.objective_node, agent.battery
+        return agent.state, agent.state_type
 
     def get_all(self):
         observation = {}
-        for agent_no, agent in self.env.agents.items():
+        for agent_no, agent in self.agents.items():
             observation[agent_no] = self.get(agent)
 
         return observation

@@ -2,6 +2,7 @@ import json
 
 from projects.dummy_project_2.agent import ZalandoAgent
 from projects.dummy_project_2.environment import ZalandoEnvironment, ZalandoObservation
+from projects.dummy_project_2.learner import ZalandoLearner
 
 
 if __name__ == '__main__':
@@ -34,20 +35,23 @@ if __name__ == '__main__':
 
     agents = {agent_no: ZalandoAgent(agent_no, 0.5, battery_decay_function, battery_charge_function) for agent_no in range(10)}
 
-    env = ZalandoEnvironment(env_map, agents, ZalandoObservation, initial_nodes, pickup_refill)
+    env = ZalandoEnvironment(env_map, agents, initial_state, ZalandoObservation, pickup_refill)
+    learner = ZalandoLearner(agents)
+
     obs = env.reset()
 
-    actions = {0: 0, 1: 2, 3: -1, 4: -1, 5: 4, 6: -1, 7: -1, 8: -1, 9: -1}
-    obs, reward = env.step(actions)
-
+    options = learner.get_random_options()
+    print(options)
     print(obs)
-    print(reward)
-    print('\n')
+    print('--\n')
+    obs, r = env.step(options)
 
-    actions = {0: -2, 1: -2, 3: -1, 4: -1, 5: 4, 6: -1, 7: -1, 8: -1, 9: -1}
-    for k in range(100):
-        obs, reward = env.step(actions)
+    for _ in range(100):
+        options = learner.get_random_options()
 
+        obs, r = env.step(options)
+        print(options)
         print(obs)
-        print(reward)
-        print('\n')
+        print(r)
+        print({agent_no: agent.battery for agent_no, agent in agents.items()})
+        print('--\n')

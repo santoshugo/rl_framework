@@ -62,7 +62,15 @@
     },
     {
       "node_1": 1,
+      "node_2": 0
+    },
+    {
+      "node_1": 1,
       "node_2": 2
+    },
+    {
+      "node_1": 2,
+      "node_2": 1
     },
     {
       "node_1": 2,
@@ -75,6 +83,10 @@
     {
       "node_1": 4,
       "node_2": 5
+    },
+    {
+      "node_1": 5,
+      "node_2": 4
     },
     {
       "node_1": 4,
@@ -93,6 +105,6 @@
       "node_2": 2
     }
   ],
-  "directed": false,
+  "directed": true,
   "no_agents": 10
 }
