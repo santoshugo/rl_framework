@@ -11,7 +11,7 @@ CHARGING_STATION = {1, 5}
 DROP_FULL = {2}
 DROP_EMPTY = {4}
 
-REWARDS = {'penalty': -np.inf, 'charge': 0.1, 'pickup': 10, 'dropdown': 100, 'move': -0.5}
+REWARDS = {'penalty': -np.inf, 'charge_penalty': -1e-6, 'charge': 0.1, 'pickup': 10, 'dropdown': 100, 'move': -0.5}
 
 
 class ZalandoEnvironment:
@@ -94,7 +94,7 @@ class ZalandoEnvironment:
             if action != -1:
                 agent.decay()
                 if agent.battery <= 0:
-                    reward[agent_no] = (REWARDS['penalty'], 0)
+                    reward[agent_no] = (REWARDS['charge_penalty'], 0)
 
                     station = 1 if len(self.charging_station_carts[1]) < 5 else 5
                     self.charging_station_carts[station].add(agent_no)
