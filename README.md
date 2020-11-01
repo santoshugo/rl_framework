@@ -1,8 +1,12 @@
 Multi-agent reinforcement learning optimizer.
 
-Structure:
-    - rl_framework
-        .environment - abstract framework to implement environments
-        .solver - framework to solve environments under a RL framework
-        
-    - projects - inherits from rl_framework and solves a single project
+test: 
+- use rllib to solve multi-agent env
+
+mvp:
+ - framework to define environments
+ - framework to solve environments
+ - dashboard with solution at action / option level
+
+future:
+ - 
