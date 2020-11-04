@@ -88,6 +88,9 @@ class ZalandoEnv(MultiAgentEnv):
             if (agent.option is None or len(agent.action_sequence) == 0) and agent_no not in options.keys():
                 raise Exception('No option is defined for agent {}'.format(agent_no))
 
+            
+
+
             # if option is invalid, penalizes agent and nothing happens
             if agent_no in options.keys():
                 option = options[agent_no]
