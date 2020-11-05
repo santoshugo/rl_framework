@@ -19,7 +19,7 @@ class SimpleEnvironment(MultiAgentEnv):
 
     Agents 1 starts in 1 and goes to 3 (and back), and agent 2 starts in 2 and goes to 5 (and back). Must pickup in 3/5 and dropdown in 1/2
     """
-    def __init__(self):
+    def __init__(self, config):
         self.graph = nx.Graph()
         self.graph.add_nodes_from([1, 2, 3, 4, 5])
         self.graph.add_edges_from([(1, 4), (2, 4), (3, 4), (4, 5)])
