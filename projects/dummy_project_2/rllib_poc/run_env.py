@@ -1,13 +1,12 @@
 import argparse
 import os
-from gym.spaces import Discrete, MultiDiscrete
-import ray
+
+from gym.spaces import Discrete, MultiDiscrete, Dict, Box
+from ray.rllib.models import ModelCatalog
 from ray.tune import register_env
 from ray.rllib.agents import dqn, pg
 
-from ray.tune.logger import pretty_print
-
-from projects.dummy_project_2.rllib_poc.simple_env import SimpleEnvironment
+from projects.dummy_project_2.rllib_poc.simple_env import SimpleEnvironment, ParametricActionsModel
 
 
 parser = argparse.ArgumentParser()
@@ -24,10 +23,22 @@ if __name__ == '__main__':
         lambda config: SimpleEnvironment(config)
     )
 
-    obs_space = MultiDiscrete([5, 2])
+    ModelCatalog.register_custom_model(
+        "model", ParametricActionsModel)
+
+    obs_space = Dict({
+            "action_mask": Box(0, 1, shape=(7,)),
+            "avail_actions": Box(0, 1, shape=(7,)),
+            "real_obs": MultiDiscrete([5, 2])
+        })
+
     act_space = Discrete(7)
 
     trainer = dqn.DQNTrainer(env="simple_env", config={
+        "model": {
+            "custom_model": "model",
+        },
+        "hiddens": [],
         "multiagent": {
             "policies": {
                 # the first tuple value is None -> uses default policy
