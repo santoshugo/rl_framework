@@ -4,7 +4,7 @@ import os
 from gym.spaces import Discrete, MultiDiscrete, Dict, Box
 from ray.rllib.models import ModelCatalog
 from ray.tune import register_env
-from ray.rllib.agents import dqn, pg
+from ray.rllib.agents import dqn, pg, ppo, a3c
 
 from projects.dummy_project_2.rllib_poc.simple_env import SimpleEnvironment, ParametricActionsModel
 
@@ -34,11 +34,19 @@ if __name__ == '__main__':
 
     act_space = Discrete(7)
 
-    trainer = dqn.DQNTrainer(env="simple_env", config={
+    trainer = pg.PGTrainer(env="simple_env", config={
         "model": {
             "custom_model": "model",
         },
-        "hiddens": [],
+        "exploration_config": {
+            # The Exploration class to use.
+            "type": "EpsilonGreedy",
+            # Config for the Exploration class' constructor:
+            "initial_epsilon": 1.0,
+            "final_epsilon": 0.02,
+            "epsilon_timesteps": 10000,  # Timesteps over which to anneal epsilon.
+
+        },
         "multiagent": {
             "policies": {
                 # the first tuple value is None -> uses default policy
@@ -49,5 +57,5 @@ if __name__ == '__main__':
         },
     })
 
-    for i in range(100):
-        print(trainer.train())
+    for i in range(1000):
+        print(i, trainer.train())

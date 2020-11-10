@@ -73,7 +73,6 @@ class SimpleEnvironment(MultiAgentEnv):
         return action_mask
 
     def step(self, action_dict):
-        print(self.state, action_dict, self.get_avail_actions(1))
         rew = {}
         obs = {}
         for agent, action in action_dict.items():
@@ -177,18 +176,19 @@ class ParametricActionsModel(DistributionalQTFModel):
                  **kw):
 
         super(ParametricActionsModel, self).__init__(obs_space, action_space, num_outputs, model_config, name, **kw)
-        self.action_embed_model = FullyConnectedNetwork(MultiDiscrete([5, 2]), action_space, num_outputs, model_config, name + "_action_embed")
+        self.action_embed_model = FullyConnectedNetwork(MultiDiscrete([5, 2]), action_space, 7, model_config, name + "_action_embed")
         self.register_variables(self.action_embed_model.variables())
 
     def forward(self, input_dict, state, seq_lens):
-        # Extract the available actions tensor from the observation.
         avail_actions = input_dict["obs"]["avail_actions"]
         action_mask = input_dict["obs"]["action_mask"]
+        action_embedding, _ = self.action_embed_model({"obs": input_dict["obs"]["real_obs"]})
 
-        # Mask out invalid actions (use tf.float32.min for stability)
+        intent_vector = tf.expand_dims(action_embedding, 1)
+        action_logits = tf.reduce_sum(avail_actions * intent_vector, axis=1)
+
         inf_mask = tf.maximum(tf.math.log(action_mask), tf.float32.min)
-
-        return avail_actions + inf_mask, state
+        return action_logits + inf_mask, state
 
     def value_function(self):
         return self.action_embed_model.value_function()
