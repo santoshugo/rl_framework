@@ -15,13 +15,15 @@ def create_graph(map):
         graph.add_node(node_id, **node)
         graph.nodes[node_id]['agent'] = None
 
+    edge_id = 0
     for edge in edges:
         node_1 = edge.pop('node_1')
         node_2 = edge.pop('node_2')
 
         distance = _compute_distance(graph, node_1, node_2)
 
-        graph.add_edge(node_1, node_2, agent=None, distance=distance, **edge)
+        graph.add_edge(node_1, node_2, id=edge_id, agent=None, distance=distance, **edge)
+        edge_id += 1
 
     return graph
 
