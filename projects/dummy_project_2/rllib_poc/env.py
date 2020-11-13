@@ -20,6 +20,13 @@ def battery_charge_function(x):
     return x + 100 / (180 * 60)
 
 
+PICKUP_REFILL_PROBABILITY = {0: 1, 3: 1, 6: 1, 7: 1, 8: 1}
+PENALTY = -100
+MOVE_PENALTY = -1
+PICKUP_REWARD = 10
+DROPDOWN_REWARD = 20
+CHARGE_REWARD = 0.1
+
 initial_state = {0: (1, 'node'),
                  1: (1, 'node'),
                  # 2: (1, 'node'),
@@ -42,22 +49,58 @@ class ZalandoEnvironment(MultiAgentEnv):
                                Box(0, 1, shape=(1,))  # battery
                                ))
 
-    def __init__(self):
-        pass
+    graph = create_graph(env_map)
+    pickup_refill_probability = PICKUP_REFILL_PROBABILITY
+
+    def __init__(self, env_config):
+        self.num_agents = env_config['num_agents']
+        self.agent_speed = env_config['agent_speed']
+        self.initial_node = env_config['initial_node']
+
+        self.agents = {n: ZalandoAgent(n, self.graph, self.agent_speed, battery_decay_function, battery_charge_function()) for n in range(self.num_agents)}
+
+        self.pickup_carts = {0: 5, 3: 5, 6: 5, 7: 5, 8: 5}
+        self.charging_station_carts = {1: set(), 5: set()}
 
     def reset(self):
-        pass
+        for n, agent in self.agents.items():
+            agent.set_state(self.initial_node[n], 'node', None)
+            agent.set_battery(1)
+
+        self.self.pickup_carts = {0: 5, 3: 5, 6: 5, 7: 5, 8: 5}
 
     def step(self, action_dict):
-        pass
 
-    def _obs(self):
-        pass
+        # refill pickup nodes
+        self._refill_pickup()
+
+        obs, rew, done = {}, {}, {}
+        for agent_num, action in action_dict.items():
+            agent = self.agents[agent_num]
+            agent_obs, agent_r, agent_done = agent.step(action)
+
+            obs[agent_num] = agent_obs
+            rew[agent_num] = agent_r
+            done[agent_num] = agent_done
+
+        done['__all__'] = all(done.values())
+
+        return obs, rew, done, {}
+
+    def _refill_pickup(self):
+        """
+        Refills pickup spaces
+        :return:
+        """
+        for pickup_station in self.pickup_carts.keys():
+            if np.random.random() < self.pickup_refill_probability[pickup_station]:
+                self.pickup_carts[pickup_station] = min(5, self.pickup_carts[pickup_station] + 1)
 
 
 class ZalandoAgent:
-    def __init__(self, id, speed, decay_function, charge_function):
+    def __init__(self, id, graph, speed, decay_function, charge_function):
         self.id = id
+        self.graph = graph
 
         self.state = None
         self.state_type = None
@@ -84,11 +127,33 @@ class ZalandoAgent:
         self.state_type = state_type
         self.edge_distance = edge_distance
 
-    def step(self):
-        pass
+    def set_battery(self, battery_charge):
+        self.battery = battery_charge
+
+    def get_available_actions(self):
+        if self.state_type == 'edge':
+            return {10}
+        else:
+            available_actions = set()
+            for n in self.graph.adj[self.state]:
+                available_actions.add(n)
+            if self.state in {1, 5}:  # charging states
+                available_actions.add(9)
+            if self.state in {6, 7, 8, 0, 3}:  # pickup states
+                available_actions.add(11)
+            if self.state in {2, 4}:  # dropdown states
+                available_actions.add(12)
+
+    def step(self, action):
+        if action not in self.get_available_actions():  # action ont available
+            r = PENALTY
+        elif :  # no battery for action
+            # movement case
+            if action in range(9):
+                self.set_state()
 
     def obs(self):
-        pass
+        return np.array([])
 
 
 graph = create_graph(env_map)
