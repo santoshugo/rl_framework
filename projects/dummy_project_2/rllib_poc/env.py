@@ -57,20 +57,23 @@ class ZalandoEnvironment(MultiAgentEnv):
         self.agent_speed = env_config['agent_speed']
         self.initial_node = env_config['initial_node']
 
-        self.agents = {n: ZalandoAgent(n, self.graph, self.agent_speed, battery_decay_function, battery_charge_function()) for n in range(self.num_agents)}
+        self.agents = {n: ZalandoAgent(n, self, battery_decay_function, battery_charge_function) for n in range(self.num_agents)}
 
         self.pickup_carts = {0: 5, 3: 5, 6: 5, 7: 5, 8: 5}
-        self.charging_station_carts = {1: set(), 5: set()}
+        self.charging_station_carts = {1: 0, 5: 0}
 
     def reset(self):
         for n, agent in self.agents.items():
             agent.set_state(self.initial_node[n], 'node', None)
             agent.set_battery(1)
 
-        self.self.pickup_carts = {0: 5, 3: 5, 6: 5, 7: 5, 8: 5}
+        self.pickup_carts = {0: 5, 3: 5, 6: 5, 7: 5, 8: 5}
+        agent_states = [agent.state for agent in self.agents.values()]
+
+        self.charging_station_carts[1] = agent_states.count(1)
+        self.charging_station_carts[5] = agent_states.count(5)
 
     def step(self, action_dict):
-
         # refill pickup nodes
         self._refill_pickup()
 
@@ -98,7 +101,7 @@ class ZalandoEnvironment(MultiAgentEnv):
 
 
 class ZalandoAgent:
-    def __init__(self, id, graph, speed, decay_function, charge_function):
+    def __init__(self, id, env, decay_function, charge_function):
         self.id = id
         self.graph = graph
 
@@ -106,12 +109,13 @@ class ZalandoAgent:
         self.state_type = None
         self.edge_distance = None
 
-        self.graph = None
+        self.env = env
+        self.graph = env.graph
 
         self.battery = 1
         self.decay_function = decay_function
         self.charge_function = charge_function
-        self.speed = speed
+        self.speed = env.agent_speed
 
         self.carrying_empty = False
         self.carrying_full = False
@@ -145,12 +149,43 @@ class ZalandoAgent:
                 available_actions.add(12)
 
     def step(self, action):
-        if action not in self.get_available_actions():  # action ont available
+        if self.battery <= 0:
             r = PENALTY
-        elif :  # no battery for action
-            # movement case
-            if action in range(9):
-                self.set_state()
+        elif action not in self.get_available_actions():  # action ont available
+            r = PENALTY
+        elif action == 9:  # TODO no more than 5 AGVs at the same charging station
+            self.charge()
+            r = CHARGE_REWARD
+        elif action == 11:  # TODO can't pickup if there is less than 1 item to pick
+            self.decay()
+            if any([self.carrying_full, self.carrying_empty]):
+                r = PENALTY
+            elif self.state in [6, 7, 8]:
+                self.carrying_full = True
+                self.env.pickup_carts[self.state] -= 1
+                r = PICKUP_REWARD
+            elif self.state in [0, 3]:
+                self.carrying_empty = True
+                self.env.pickup_carts[self.state] -= 1
+                r = PICKUP_REWARD
+        elif action == 12:
+            self.decay()
+            if self.state == 2 and self.carrying_full:
+                self.carrying_full = False
+                r = DROPDOWN_REWARD
+            elif self.state == 4 and self.carrying_empty:
+                self.carrying_empty = False
+                r = DROPDOWN_REWARD
+            else:
+                r = PENALTY
+        elif action == 10:  # TODO implement movement in edges
+            r = MOVE_PENALTY
+        else:  # move to other nodes
+            self.decay()
+            r = MOVE_PENALTY
+            self.set_state(action, 'node', None)
+
+        return self.obs, r, False
 
     def obs(self):
         return np.array([])
