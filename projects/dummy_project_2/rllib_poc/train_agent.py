@@ -16,7 +16,7 @@ parser.add_argument("--stop-reward", type=float, default=7.0)
 parser.add_argument("--stop-timesteps", type=int, default=50000)
 
 if __name__ == '__main__':
-    ray.init()
+    # ray.init()
     register_env(
         "zalando_env",
         lambda config: ZalandoEnvironment(config)
@@ -33,9 +33,12 @@ if __name__ == '__main__':
 
     config = {
         "multiagent": {
-            "policies": {"pol{}".format(i): (None, obs_space, act_space, {"gamma": 1, "agent_id": i}) for i in range(2)},
+            "policies": {"pol{}".format(i): (None, obs_space, act_space, {"gamma": 0.99, "agent_id": i}) for i in range(2)},
             "policy_mapping_fn": lambda agent_id: 'pol{}'.format(agent_id)
         },
+        "lr": 0.01,
+        "horizon": 100,
+        "no_done_at_end": True,
         "env_config": {"num_agents": 2,
                        "agent_speed": 0.5,
                        "initial_node": {0: 1,
@@ -55,6 +58,11 @@ if __name__ == '__main__':
     trainer = dqn.DQNTrainer(env="zalando_env", config=config)
 
     for i in range(1000):
-        print(i, trainer.train())
+        results = trainer.train()
 
-    ray.shutdown()
+        if i % 10 == 0:  # save every 10th training iteration
+            print(results)
+            checkpoint_path = trainer.save()
+            print(checkpoint_path)
+
+    # ray.shutdown()
