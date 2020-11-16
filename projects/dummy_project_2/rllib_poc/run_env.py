@@ -1,13 +1,13 @@
 import argparse
 import os
 
-from gym.spaces import Discrete, MultiDiscrete, Dict, Box
+from gym.spaces import Discrete, MultiDiscrete, Dict, Box, Tuple
 from ray.rllib.models import ModelCatalog
 from ray.tune import register_env
 from ray.rllib.agents import dqn, pg, ppo, a3c
+import ray
 
-from projects.dummy_project_2.rllib_poc.simple_env import SimpleEnvironment, ParametricActionsModel
-
+from projects.dummy_project_2.rllib_poc.env import ZalandoEnvironment
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--run", type=str, default="PG")
@@ -15,47 +15,46 @@ parser.add_argument("--as-test", action="store_true")
 parser.add_argument("--stop-reward", type=float, default=7.0)
 parser.add_argument("--stop-timesteps", type=int, default=50000)
 
-
 if __name__ == '__main__':
-
+    ray.init()
     register_env(
-        "simple_env",
-        lambda config: SimpleEnvironment(config)
+        "zalando_env",
+        lambda config: ZalandoEnvironment(config)
     )
 
-    ModelCatalog.register_custom_model(
-        "model", ParametricActionsModel)
+    obs_space = Tuple((Discrete(9 + 1),  # nodes + not in node
+                               Discrete(12 + 1),  # edges + not in edge
+                               Discrete(2),  # carrying full
+                               Discrete(2),  # carrying empty
+                               Box(low=-1, high=2, shape=(1,))  # battery
+                               ))
 
-    obs_space = Dict({
-            "action_mask": Box(0, 1, shape=(7,)),
-            "avail_actions": Box(0, 1, shape=(7,)),
-            "real_obs": MultiDiscrete([5, 2])
-        })
+    act_space = Discrete(9 + 4)
 
-    act_space = Discrete(7)
-
-    trainer = pg.PGTrainer(env="simple_env", config={
-        "model": {
-            "custom_model": "model",
-        },
-        "exploration_config": {
-            # The Exploration class to use.
-            "type": "EpsilonGreedy",
-            # Config for the Exploration class' constructor:
-            "initial_epsilon": 1.0,
-            "final_epsilon": 0.02,
-            "epsilon_timesteps": 10000,  # Timesteps over which to anneal epsilon.
-
-        },
+    config = {
         "multiagent": {
-            "policies": {
-                # the first tuple value is None -> uses default policy
-                'pol1': (None, obs_space, act_space, {"gamma": 1}),
-                'pol2': (None, obs_space, act_space, {"gamma": 1})
-            },
-            "policy_mapping_fn": lambda agent_id: 'pol1' if agent_id == 1 else 'pol2'
+            "policies": {"pol{}".format(i): (None, obs_space, act_space, {"gamma": 1, "agent_id": i}) for i in range(2)},
+            "policy_mapping_fn": lambda agent_id: 'pol{}'.format(agent_id)
         },
-    })
+        "env_config": {"num_agents": 2,
+                       "agent_speed": 0.5,
+                       "initial_node": {0: 1,
+                                        1: 1,
+                                        # 2: (1, 'node'),
+                                        # 3: (1, 'node'),
+                                        # 4: (1, 'node'),
+                                        # 5: (5, 'node'),
+                                        # 6: (5, 'node'),
+                                        # 7: (5, 'node'),
+                                        # 8: (5, 'node'),
+                                        # 9: (5, 'node')
+                                        }
+                       }}
+    print(config)
+
+    trainer = dqn.DQNTrainer(env="zalando_env", config=config)
 
     for i in range(1000):
         print(i, trainer.train())
+
+    ray.shutdown()

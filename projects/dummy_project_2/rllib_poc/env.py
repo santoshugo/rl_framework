@@ -1,4 +1,4 @@
-from gym.spaces import Tuple, Discrete, Box
+from gym.spaces import Tuple, Discrete, Box, Dict
 import json
 import numpy as np
 
@@ -7,7 +7,7 @@ from ray.rllib.env.multi_agent_env import MultiAgentEnv, ENV_STATE
 from projects.dummy_project_2.environment import ZalandoObservation
 from projects.dummy_project_2.utils import create_graph
 
-MAP_PATH = 'C:\\Users\\santosh\\PycharmProjects\\rl_framework\\docs\\maps\\dummy_map_2.json'
+MAP_PATH = '/home/hugo/PycharmProjects/rl_framework/docs/maps/dummy_map_2.json'
 with open(MAP_PATH) as f:
     env_map = json.load(f)
 
@@ -42,11 +42,12 @@ initial_state = {0: (1, 'node'),
 
 class ZalandoEnvironment(MultiAgentEnv):
     action_space = Discrete(9 + 4)  # move to nodes 0-8 and charge (9), move in edge (10), pickup (11) and dropdown (12)
+
     observation_space = Tuple((Discrete(9 + 1),  # nodes + not in node
                                Discrete(12 + 1),  # edges + not in edge
                                Discrete(2),  # carrying full
                                Discrete(2),  # carrying empty
-                               Box(0, 1, shape=(1,))  # battery
+                               Box(low=-1, high=2, shape=(1,))  # battery
                                ))
 
     graph = create_graph(env_map)
@@ -73,6 +74,12 @@ class ZalandoEnvironment(MultiAgentEnv):
         self.charging_station_carts[1] = agent_states.count(1)
         self.charging_station_carts[5] = agent_states.count(5)
 
+        obs = {}
+        for n, agent in self.agents.items():
+            obs[n] = agent.obs()
+
+        return obs
+
     def step(self, action_dict):
         # refill pickup nodes
         self._refill_pickup()
@@ -87,7 +94,7 @@ class ZalandoEnvironment(MultiAgentEnv):
             done[agent_num] = agent_done
 
         done['__all__'] = all(done.values())
-
+        #print(action_dict, rew)
         return obs, rew, done, {}
 
     def _refill_pickup(self):
@@ -101,9 +108,8 @@ class ZalandoEnvironment(MultiAgentEnv):
 
 
 class ZalandoAgent:
-    def __init__(self, id, env, decay_function, charge_function):
-        self.id = id
-        self.graph = graph
+    def __init__(self, agent_id, env, decay_function, charge_function):
+        self.agent_id = agent_id
 
         self.state = None
         self.state_type = None
@@ -147,6 +153,7 @@ class ZalandoAgent:
                 available_actions.add(11)
             if self.state in {2, 4}:  # dropdown states
                 available_actions.add(12)
+        return available_actions
 
     def step(self, action):
         if self.battery <= 0:
@@ -185,13 +192,14 @@ class ZalandoAgent:
             r = MOVE_PENALTY
             self.set_state(action, 'node', None)
 
-        return self.obs, r, False
+        return self.obs(), r, False
 
     def obs(self):
-        return np.array([])
+        #
+        # return {"node": self.state,
+        #         "edge": 12,
+        #         "carrying_full": self.carrying_full,
+        #         "carrying_empty": self.carrying_empty,
+        #         "battery": self.battery}
 
-
-graph = create_graph(env_map)
-print(graph.nodes)
-print(graph.edges)
-print(graph.adj[1])
+        return [self.state, 12, self.carrying_full, self.carrying_empty, [self.battery]]
