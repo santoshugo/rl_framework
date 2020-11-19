@@ -16,53 +16,55 @@ parser.add_argument("--stop-reward", type=float, default=7.0)
 parser.add_argument("--stop-timesteps", type=int, default=50000)
 
 if __name__ == '__main__':
-    # ray.init()
+    ray.init()
     register_env(
         "zalando_env",
         lambda config: ZalandoEnvironment(config)
     )
 
     obs_space = Tuple((Discrete(9 + 1),  # nodes + not in node
-                               Discrete(12 + 1),  # edges + not in edge
-                               Discrete(2),  # carrying full
-                               Discrete(2),  # carrying empty
-                               Box(low=-1, high=2, shape=(1,))  # battery
-                               ))
+                       Discrete(12 + 1),  # edges + not in edge
+                       Discrete(2),  # carrying full
+                       Discrete(2),  # carrying empty
+                       Box(low=-1, high=2, shape=(1,))  # battery
+                       ))
 
     act_space = Discrete(9 + 4)
 
-    config = {
-        "multiagent": {
-            "policies": {"pol{}".format(i): (None, obs_space, act_space, {"gamma": 0.99, "agent_id": i}) for i in range(2)},
-            "policy_mapping_fn": lambda agent_id: 'pol{}'.format(agent_id)
-        },
-        "lr": 0.01,
-        "horizon": 100,
-        "no_done_at_end": True,
-        "env_config": {"num_agents": 2,
-                       "agent_speed": 0.5,
-                       "initial_node": {0: 1,
-                                        1: 1,
-                                        # 2: (1, 'node'),
-                                        # 3: (1, 'node'),
-                                        # 4: (1, 'node'),
-                                        # 5: (5, 'node'),
-                                        # 6: (5, 'node'),
-                                        # 7: (5, 'node'),
-                                        # 8: (5, 'node'),
-                                        # 9: (5, 'node')
-                                        }
-                       }}
-    print(config)
+    config = dqn.DEFAULT_CONFIG
+
+    config["num_workers"] = 8
+    config["multiagent"]["policies"] = {"pol{}".format(i): (None, obs_space, act_space, {"gamma": 0.99, "agent_id": i}) for i in range(2)}
+    config["multiagent"]["policy_mapping_fn"] = lambda agent_id: 'pol{}'.format(agent_id)
+
+    config["lr"] = 0.01
+    config["horizon"] = 200
+    config['no_done_at_end'] = True
+    config["env_config"] = {"num_agents": 2,
+                            "agent_speed": 0.5,
+                            "initial_node": {0: 1,
+                                             1: 1,
+                                             # 2: (1, 'node'),
+                                             # 3: (1, 'node'),
+                                             # 4: (1, 'node'),
+                                             # 5: (5, 'node'),
+                                             # 6: (5, 'node'),
+                                             # 7: (5, 'node'),
+                                             # 8: (5, 'node'),
+                                             # 9: (5, 'node')
+                                             }
+                            }
+
+    config["exploration_config"]["epsilon_timesteps"] = 200000
 
     trainer = dqn.DQNTrainer(env="zalando_env", config=config)
 
-    for i in range(1000):
+    for i in range(1, 1000):
         results = trainer.train()
 
-        if i % 10 == 0:  # save every 10th training iteration
+        if i % 50 == 0:  # save every 10th training iteration
             print(results)
             checkpoint_path = trainer.save()
             print(checkpoint_path)
 
-    # ray.shutdown()
+    ray.shutdown()

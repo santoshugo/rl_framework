@@ -7,7 +7,7 @@ from ray.rllib.env.multi_agent_env import MultiAgentEnv, ENV_STATE
 from projects.dummy_project_2.environment import ZalandoObservation
 from projects.dummy_project_2.utils import create_graph
 
-MAP_PATH = 'C:\\Users\\santosh\\PycharmProjects\\rl_framework\\docs\\maps\\dummy_map_2.json'
+MAP_PATH = '/home/hugo/PycharmProjects/rl_framework/docs/maps/dummy_map_2.json'
 with open(MAP_PATH) as f:
     env_map = json.load(f)
 
@@ -25,9 +25,9 @@ def battery_charge_function(x):
 PICKUP_REFILL_PROBABILITY = {0: 1, 3: 1, 6: 1, 7: 1, 8: 1}
 PENALTY = -100
 MOVE_PENALTY = -1
-PICKUP_REWARD = 10
-DROPDOWN_REWARD = 20
-CHARGE_REWARD = 0.1
+PICKUP_REWARD = 100
+DROPDOWN_REWARD = 200
+CHARGE_REWARD = 0
 
 initial_state = {0: (1, 'node'),
                  1: (1, 'node'),
@@ -100,7 +100,7 @@ class ZalandoEnvironment(MultiAgentEnv):
 
         done['__all__'] = all(done.values())
         self.no_steps += 1
-        #print(action_dict, obs, rew)
+
         return obs, rew, done, {}
 
     def _refill_pickup(self):
@@ -197,7 +197,6 @@ class ZalandoAgent:
             self.decay()
             r = MOVE_PENALTY
             self.set_state(action, 'node', None)
-
         return self.obs(), r, False
 
     def obs(self):

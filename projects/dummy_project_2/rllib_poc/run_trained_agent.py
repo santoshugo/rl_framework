@@ -2,10 +2,11 @@ from ray.rllib.agents import dqn
 from gym.spaces import Tuple, Discrete, Box
 from ray.tune import register_env
 import ray
+import numpy as np
 
 from projects.dummy_project_2.rllib_poc.env import ZalandoEnvironment
 
-PATH = 'C:\\Users\\santosh\\ray_results\\DQN_zalando_env_2020-11-16_14-48-444fo50a1a\\checkpoint_41\\checkpoint-41'
+PATH = '/home/hugo/ray_results/DQN_zalando_env_2020-11-18_18-06-03vhi9d2fr/checkpoint_500/checkpoint-500'
 
 if __name__ == '__main__':
     ray.init()
@@ -49,8 +50,9 @@ if __name__ == '__main__':
     trainer = dqn.DQNTrainer(env="zalando_env", config=config)
     trainer.restore(PATH)
 
-    test_observation = [[]]
+    test_observation = [0, 12, False, False, [1]]
 
-    trainer.compute_action(test_observation)
+    action = trainer.compute_action(test_observation, policy_id='pol0', explore=False)
+    print(action)
 
     ray.shutdown()
