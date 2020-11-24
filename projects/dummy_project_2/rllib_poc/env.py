@@ -3,9 +3,11 @@ import json
 import numpy as np
 
 from ray.rllib.env.multi_agent_env import MultiAgentEnv, ENV_STATE
-
+import tensorflow as tf
 from projects.dummy_project_2.environment import ZalandoObservation
 from projects.dummy_project_2.utils import create_graph
+from ray.rllib.models.tf.fcnet import FullyConnectedNetwork
+from ray.rllib.agents.dqn.distributional_q_tf_model import DistributionalQTFModel
 
 MAP_PATH = '/home/hugo/PycharmProjects/rl_framework/docs/maps/dummy_map_2.json'
 with open(MAP_PATH) as f:
@@ -25,9 +27,9 @@ def battery_charge_function(x):
 PICKUP_REFILL_PROBABILITY = {0: 1, 3: 1, 6: 1, 7: 1, 8: 1}
 PENALTY = -100
 MOVE_PENALTY = -1
-PICKUP_REWARD = 100
-DROPDOWN_REWARD = 200
-CHARGE_REWARD = 0
+PICKUP_REWARD = 1000
+DROPDOWN_REWARD = 2000
+CHARGE_REWARD = 10
 
 initial_state = {0: (1, 'node'),
                  1: (1, 'node'),
@@ -45,12 +47,20 @@ initial_state = {0: (1, 'node'),
 class ZalandoEnvironment(MultiAgentEnv):
     action_space = Discrete(9 + 4)  # move to nodes 0-8 and charge (9), move in edge (10), pickup (11) and dropdown (12)
 
-    observation_space = Tuple((Discrete(9 + 1),  # nodes + not in node
-                               Discrete(12 + 1),  # edges + not in edge
-                               Discrete(2),  # carrying full
-                               Discrete(2),  # carrying empty
-                               Box(low=-1, high=2, shape=(1,))  # battery
-                               ))
+    # observation_space = Tuple((Discrete(9 + 1),  # nodes + not in node
+    #                            Discrete(12 + 1),  # edges + not in edge
+    #                            Discrete(2),  # carrying full
+    #                            Discrete(2),  # carrying empty
+    #                            Box(low=-1, high=2, shape=(1,))  # battery
+    #                            ))
+
+    # observation_space = Box(low=0, high=1, shape=(9 + 1 + 12 + 1 + 2 + 2 + 1, ))
+
+    observation_space = Dict({
+        "action_mask": Box(low=0, high=1, shape=(13,)),
+        "avail_actions": Box(low=0, high=1, shape=(13,)),
+        "real_obs": Box(low=0, high=1, shape=(9 + 1 + 12 + 1 + 2 + 2 + 1,))
+    })
 
     graph = create_graph(env_map)
     pickup_refill_probability = PICKUP_REFILL_PROBABILITY
@@ -155,18 +165,23 @@ class ZalandoAgent:
                 available_actions.add(n)
             if self.state in {1, 5}:  # charging states
                 available_actions.add(9)
-            if self.state in {6, 7, 8, 0, 3}:  # pickup states
+            if self.state in {6, 7, 8} and not self.carrying_empty and not self.carrying_full:
                 available_actions.add(11)
-            if self.state in {2, 4}:  # dropdown states
+            if self.state == 2 and self.carrying_full:
                 available_actions.add(12)
+            if self.state == 4 and self.carrying_empty:
+                available_actions.add(12)
+
         return available_actions
 
     def step(self, action):
+        # print(self.state, self.carrying_full, self.carrying_empty, action)
         if self.battery <= 0:
             r = PENALTY
         elif action not in self.get_available_actions():  # action ont available
             r = PENALTY
         elif action == 9:  # TODO no more than 5 AGVs at the same charging station
+            print('charging')
             self.charge()
             r = CHARGE_REWARD
         elif action == 11:  # TODO can't pickup if there is less than 1 item to pick
@@ -206,5 +221,64 @@ class ZalandoAgent:
         #         "carrying_full": self.carrying_full,
         #         "carrying_empty": self.carrying_empty,
         #         "battery": self.battery}
+        node_array = np.zeros(10)
+        node_array[self.state] = 1
 
-        return [self.state, 12, self.carrying_full, self.carrying_empty, [self.battery]]
+        edge_array = np.zeros(13)
+        edge_array[12] = 1
+
+        cf_array = np.zeros(2)
+        cf_array[self.carrying_full] = 1
+
+        ce_array = np.zeros(2)
+        ce_array[self.carrying_empty] = 1
+
+        battery_array = np.array([self.battery])
+
+        available_actions_array = np.zeros(13)
+        for action in self.get_available_actions():
+            available_actions_array[action] = 1
+
+        return {"action_mask": available_actions_array,
+                "avail_actions": np.ones(13),
+                "real_obs": np.concatenate([node_array, edge_array, cf_array, ce_array, battery_array])
+                }
+
+        # return np.concatenate([node_array, edge_array, cf_array, ce_array, battery_array])
+
+        # return [self.state, 12, self.carrying_full, self.carrying_empty, [self.battery]]
+
+
+class ParametricActionsModel(DistributionalQTFModel):
+    """Parametric action model that handles the dot product and masking.
+    This assumes the outputs are logits for a single Categorical action dist.
+    Getting this to work with a more complex output (e.g., if the action space
+    is a tuple of several distributions) is also possible but left as an
+    exercise to the reader.
+    """
+
+    def __init__(self,
+                 obs_space,
+                 action_space,
+                 num_outputs,
+                 model_config,
+                 name,
+                 **kw):
+        super(ParametricActionsModel, self).__init__(obs_space, action_space, num_outputs, model_config, name, **kw)
+        self.action_embed_model = FullyConnectedNetwork(Box(low=0, high=1, shape=(9 + 1 + 12 + 1 + 2 + 2 + 1,)), action_space, 13, model_config,
+                                                        name + "_action_embed")
+        self.register_variables(self.action_embed_model.variables())
+
+    def forward(self, input_dict, state, seq_lens):
+        avail_actions = input_dict["obs"]["avail_actions"]
+        action_mask = input_dict["obs"]["action_mask"]
+        action_embedding, _ = self.action_embed_model({"obs": input_dict["obs"]["real_obs"]})
+
+        intent_vector = tf.expand_dims(action_embedding, 1)
+        action_logits = tf.reduce_sum(avail_actions * intent_vector, axis=1)
+
+        inf_mask = tf.maximum(tf.math.log(action_mask), tf.float32.min)
+        return action_logits + inf_mask, state
+
+    def value_function(self):
+        return self.action_embed_model.value_function()
