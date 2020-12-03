@@ -1,17 +1,18 @@
-from gym.spaces import Tuple, Discrete, Box, Dict
-import json
-import numpy as np
 
-from ray.rllib.env.multi_agent_env import MultiAgentEnv, ENV_STATE
+import numpy as np
 import tensorflow as tf
-from projects.dummy_project_2.environment import ZalandoObservation
-from projects.dummy_project_2.utils import create_graph
+
+from gym.spaces import Tuple, Discrete, Box, Dict
+
+from ray.rllib.env.multi_agent_env import MultiAgentEnv
 from ray.rllib.models.tf.fcnet import FullyConnectedNetwork
 from ray.rllib.agents.dqn.distributional_q_tf_model import DistributionalQTFModel
 
-MAP_PATH = '/home/hugo/PycharmProjects/rl_framework/docs/maps/dummy_map_2.json'
-with open(MAP_PATH) as f:
-    env_map = json.load(f)
+from rl_framework.environment import AbstractAgent
+from rl_framework.utils.graph import from_json
+
+
+MAP_PATH = 'C:\\Users\\santo\\rl_framework\\docs\maps\\dummy_map_2.json'
 
 
 def battery_decay_function(x):
@@ -32,29 +33,12 @@ DROPDOWN_REWARD = 2000
 CHARGE_REWARD = 10
 
 initial_state = {0: (1, 'node'),
-                 1: (1, 'node'),
-                 # 2: (1, 'node'),
-                 # 3: (1, 'node'),
-                 # 4: (1, 'node'),
-                 # 5: (5, 'node'),
-                 # 6: (5, 'node'),
-                 # 7: (5, 'node'),
-                 # 8: (5, 'node'),
-                 # 9: (5, 'node')
+                 1: (5, 'node')
                  }
 
 
 class ZalandoEnvironment(MultiAgentEnv):
     action_space = Discrete(9 + 4)  # move to nodes 0-8 and charge (9), move in edge (10), pickup (11) and dropdown (12)
-
-    # observation_space = Tuple((Discrete(9 + 1),  # nodes + not in node
-    #                            Discrete(12 + 1),  # edges + not in edge
-    #                            Discrete(2),  # carrying full
-    #                            Discrete(2),  # carrying empty
-    #                            Box(low=-1, high=2, shape=(1,))  # battery
-    #                            ))
-
-    # observation_space = Box(low=0, high=1, shape=(9 + 1 + 12 + 1 + 2 + 2 + 1, ))
 
     observation_space = Dict({
         "action_mask": Box(low=0, high=1, shape=(13,)),
@@ -62,7 +46,7 @@ class ZalandoEnvironment(MultiAgentEnv):
         "real_obs": Box(low=0, high=1, shape=(9 + 1 + 12 + 1 + 2 + 2 + 1,))
     })
 
-    graph = create_graph(env_map)
+    graph = from_json(MAP_PATH)
     pickup_refill_probability = PICKUP_REFILL_PROBABILITY
 
     def __init__(self, env_config):
@@ -80,7 +64,7 @@ class ZalandoEnvironment(MultiAgentEnv):
     def reset(self):
         self.no_steps = 0
         for n, agent in self.agents.items():
-            agent.set_state(self.initial_node[n], 'node', None)
+            agent.set_state({'state': self.initial_node[n], 'state_type': 'node', 'edge_distance': None})
             agent.set_battery(1)
 
         self.pickup_carts = {0: 5, 3: 5, 6: 5, 7: 5, 8: 5}
@@ -123,21 +107,20 @@ class ZalandoEnvironment(MultiAgentEnv):
                 self.pickup_carts[pickup_station] = min(5, self.pickup_carts[pickup_station] + 1)
 
 
-class ZalandoAgent:
-    def __init__(self, agent_id, env, decay_function, charge_function):
-        self.agent_id = agent_id
+class ZalandoAgent(AbstractAgent):
+    def __init__(self, id, environment, decay_function, charge_function):
+        super().__init__(id, environment)
 
         self.state = None
         self.state_type = None
         self.edge_distance = None
 
-        self.env = env
-        self.graph = env.graph
+        self.graph = self.environment.graph
 
         self.battery = 1
         self.decay_function = decay_function
         self.charge_function = charge_function
-        self.speed = env.agent_speed
+        self.speed = self.environment.agent_speed
 
         self.carrying_empty = False
         self.carrying_full = False
@@ -148,10 +131,10 @@ class ZalandoAgent:
     def decay(self):
         self.battery = max(0, self.decay_function(self.battery))
 
-    def set_state(self, state, state_type, edge_distance):
-        self.state = state
-        self.state_type = state_type
-        self.edge_distance = edge_distance
+    def set_state(self, state):
+        self.state = state['state']
+        self.state_type = state['state_type']
+        self.edge_distance = state['edge_distance']
 
     def set_battery(self, battery_charge):
         self.battery = battery_charge
@@ -181,7 +164,6 @@ class ZalandoAgent:
         elif action not in self.get_available_actions():  # action ont available
             r = PENALTY
         elif action == 9:  # TODO no more than 5 AGVs at the same charging station
-            print('charging')
             self.charge()
             r = CHARGE_REWARD
         elif action == 11:  # TODO can't pickup if there is less than 1 item to pick
@@ -190,11 +172,11 @@ class ZalandoAgent:
                 r = PENALTY
             elif self.state in [6, 7, 8]:
                 self.carrying_full = True
-                self.env.pickup_carts[self.state] -= 1
+                self.environment.pickup_carts[self.state] -= 1
                 r = PICKUP_REWARD
             elif self.state in [0, 3]:
                 self.carrying_empty = True
-                self.env.pickup_carts[self.state] -= 1
+                self.environment.pickup_carts[self.state] -= 1
                 r = PICKUP_REWARD
         elif action == 12:
             self.decay()
@@ -211,16 +193,10 @@ class ZalandoAgent:
         else:  # move to other nodes
             self.decay()
             r = MOVE_PENALTY
-            self.set_state(action, 'node', None)
+            self.set_state({'state': action, 'state_type': 'node', 'edge_distance': None})
         return self.obs(), r, False
 
     def obs(self):
-        #
-        # return {"node": self.state,
-        #         "edge": 12,
-        #         "carrying_full": self.carrying_full,
-        #         "carrying_empty": self.carrying_empty,
-        #         "battery": self.battery}
         node_array = np.zeros(10)
         node_array[self.state] = 1
 
@@ -243,10 +219,6 @@ class ZalandoAgent:
                 "avail_actions": np.ones(13),
                 "real_obs": np.concatenate([node_array, edge_array, cf_array, ce_array, battery_array])
                 }
-
-        # return np.concatenate([node_array, edge_array, cf_array, ce_array, battery_array])
-
-        # return [self.state, 12, self.carrying_full, self.carrying_empty, [self.battery]]
 
 
 class ParametricActionsModel(DistributionalQTFModel):

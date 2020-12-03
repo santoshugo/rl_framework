@@ -1,13 +1,10 @@
-import argparse
-import os
-
-from gym.spaces import Discrete, MultiDiscrete, Dict, Box, Tuple
+from gym.spaces import Discrete, Dict, Box
 from ray.rllib.models import ModelCatalog
 from ray.tune import register_env
-from ray.rllib.agents import dqn, pg, ppo, a3c
+from ray.rllib.agents import pg
 import ray
 
-from projects.dummy_project_2.rllib_poc.env import ZalandoEnvironment, ParametricActionsModel
+from projects.dummy_project.env import ZalandoEnvironment, ParametricActionsModel
 
 
 if __name__ == '__main__':
@@ -16,13 +13,6 @@ if __name__ == '__main__':
         "zalando_env",
         lambda config: ZalandoEnvironment(config)
     )
-
-    # obs_space = Tuple((Discrete(9 + 1),  # nodes + not in node
-    #                    Discrete(12 + 1),  # edges + not in edge
-    #                    Discrete(2),  # carrying full
-    #                    Discrete(2),  # carrying empty
-    #                    Box(low=-1, high=2, shape=(1,))  # battery
-    #                    ))
 
     obs_space = Dict({
         "action_mask": Box(low=0, high=1, shape=(13,)),

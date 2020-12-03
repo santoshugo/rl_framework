@@ -2,9 +2,8 @@ from ray.rllib.agents import dqn
 from gym.spaces import Tuple, Discrete, Box
 from ray.tune import register_env
 import ray
-import numpy as np
 
-from projects.dummy_project_2.rllib_poc.env import ZalandoEnvironment
+from projects.dummy_project.env import ZalandoEnvironment
 
 PATH = '/home/hugo/ray_results/DQN_zalando_env_2020-11-18_18-06-03vhi9d2fr/checkpoint_500/checkpoint-500'
 

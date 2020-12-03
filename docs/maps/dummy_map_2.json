@@ -105,6 +105,5 @@
       "node_2": 2
     }
   ],
-  "directed": true,
-  "no_agents": 10
+  "directed": true
 }
