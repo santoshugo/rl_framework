@@ -1,4 +1,4 @@
-from rl_framework.utils.typing import AgentID, AgentObs, AgentAction, AgentState, List
+from moirai.utils.typing import AgentID, AgentObs, AgentAction, AgentState, List
 
 
 class AbstractAgent:
