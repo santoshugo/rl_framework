@@ -13,17 +13,31 @@ from typing import Optional, List
 class SimpleGraphObservation(ObservationBuilder):
     def __init__(self):
         super().__init__()
-        self.G = nx.Graph()
+        self.G = nx.DiGraph()
 
         self.agent_destinations = None
         self.agent_state = None
+        self.no_discrete_states = None
+
+        self.all_states = set()
 
         self.node_dictionary = {}
         self.edge_dictionary = {}
 
     def reset(self):
         self.agent_destinations = set([agent.target for agent in self.env.agents])
-        self.compute_graph()
+        self.get_all_states()
+
+        for state in self.all_states:
+            if state not in self.node_dictionary.keys() and state not in self.edge_dictionary.keys():
+                self.compute_graph(state)
+
+        self.no_discrete_states = max(max(self.node_dictionary.values()), max(self.edge_dictionary.values()))
+
+        self.G = nx.relabel.convert_node_labels_to_integers(self.G)
+        for n in self.G.nodes:
+            self.node_dictionary[(self.G.nodes[n]['pos'], self.G.nodes[n]['direction'])] = n
+
         #nx.draw(self.G, pos={n: (self.G.nodes[n]['pos'][1], -self.G.nodes[n]['pos'][0]) for n in self.G.nodes})
         #plt.show()
 
@@ -40,21 +54,31 @@ class SimpleGraphObservation(ObservationBuilder):
         for h in handles:
             temp = deepcopy(partial_observations)
             self_obs = temp.pop(h)
-            observations[h] = {'self': self_obs, 'other': list(temp.values())}
+            if len(handles) == 1:
+                observations[h] = {'self': self_obs}
+            else:
+                observations[h] = {'self': self_obs, 'other': tuple(temp.values())}
 
-        return self.G, observations
+        return self.no_discrete_states, self.G, observations
 
     def get(self, handle: int = 0):
         observation = {}
 
         agent = self.env.agents[handle]
-        pos = agent.position if agent.status != 0 else agent.initial_position
+        if agent.status == 0:
+            pos = agent.initial_position
+        elif agent.status == 3:
+            pos = agent.old_position
+        else:
+            pos = agent.position
 
-        observation['position'] = self.node_dictionary[pos] if pos in self.node_dictionary.keys() else self.edge_dictionary[pos]
+        state = (pos, agent.direction)
+
+        observation['position'] = self.node_dictionary[state] if state in self.node_dictionary.keys() else self.edge_dictionary[state]
         observation['position_type'] = 0 if pos in self.node_dictionary.keys() else 1  # 0 if in node, 1 if in edge
         observation['direction'] = agent.direction
         observation['moving'] = agent.moving
-        observation['target'] = self.node_dictionary[agent.target]
+        observation['target'] = 0 # self.node_dictionary[agent.target]
 
         # TODO add more relevant agent information:
         # - next node when in edge?
@@ -64,9 +88,8 @@ class SimpleGraphObservation(ObservationBuilder):
 
         return observation
 
-    def compute_graph(self):
+    def compute_graph(self, initial_node):
         # dfs to get graph structure
-        initial_node = self.env.agents[0].initial_position
         node_ind = 1
 
         discovered = set()
@@ -81,10 +104,9 @@ class SimpleGraphObservation(ObservationBuilder):
                     self.node_dictionary[v] = node_ind
                     node_ind += 1
 
-                self.G.add_node(self.node_dictionary[v], pos=v)
+                self.G.add_node(self.node_dictionary[v], pos=v[0], direction=v[1])
 
                 for w in self.get_neighbors(v):
-
                     if w not in self.node_dictionary.keys():
                         self.node_dictionary[w] = node_ind
                         node_ind += 1
@@ -96,104 +118,84 @@ class SimpleGraphObservation(ObservationBuilder):
         self.simplify_graph()
 
     def simplify_graph(self):
-        edge_id = 1
-        removable_nodes = set([n for n in list(self.G.nodes) if self.G.degree[n] == 2])
-        for n in self.agent_destinations:
-            removable_nodes.discard(self.node_dictionary[n])
+        edge_id = 0
+
+        removable_nodes = set([n for n in list(self.G.nodes) if self.G.out_degree(n) == 1
+                               and self.G.in_degree(n) == 1
+                               and not self.env.rail.is_dead_end(self.G.nodes[n]['pos'])
+                               and self.G.nodes[n]['pos'] not in self.agent_destinations])
 
         while removable_nodes:
             n = removable_nodes.pop()
-            end_points = []
-            path = set()
-            stack = [n]
+
+            start_point = None
+            end_point = None
+
+            path = list()
+            stack = [(n, 'origin')]
 
             while stack:
-                v = stack.pop()
+                v, path_position = stack.pop()
                 if v not in path:
-                    path.add(v)
+                    path.insert(0, v) if path_position == 'predecessor' else path.append(v)
 
-                    for w in self.G.adj[v]:
+                    for w in self.G.successors(v):
                         if w in removable_nodes:
                             removable_nodes.remove(w)
-                            stack.append(w)
-                        elif self.G.degree[w] == 2 and self.G.nodes[w]['pos'] not in self.agent_destinations:
-                            stack.append(w)
+                            stack.append((w, 'successor'))
                         else:
-                            end_points.append(w)
+                            end_point = w
 
-            self.G.add_edge(end_points[0], end_points[1], path=path, distance=len(path), edge_id=edge_id)
-            edge_id += 1
+                    for y in self.G.predecessors(v):
+                        if y in removable_nodes:
+                            removable_nodes.remove(y)
+                            stack.append((y, 'predecessor'))
+                        else:
+                            start_point = y
+
+            self.G.add_edge(start_point, end_point, path=path, distance=len(path), edge_id=edge_id)
+
             for n in path:
-                self.edge_dictionary[self.G.nodes[n]['pos']] = edge_id
-                del self.node_dictionary[self.G.nodes[n]['pos']]
+                self.edge_dictionary[(self.G.nodes[n]['pos'], self.G.nodes[n]['direction'])] = edge_id
+                del self.node_dictionary[(self.G.nodes[n]['pos'], self.G.nodes[n]['direction'])]
                 self.G.remove_node(n)
 
-    def get_neighbors(self, position):
-        h, w = position
+            edge_id += 1
+
+    def get_neighbors(self, state):
+        h, w, direction = state[0][0], state[0][1], state[1]
         neighbors = []
-        transitions = np.binary_repr(self.env.rail.grid[h, w], 16)
+        transitions = self.env.rail.get_transitions(h, w, direction)
 
         # move north
-        if h > 0:
-            north_neighbor = (h - 1, w)
-            north_transitions = np.binary_repr(self.env.rail.grid[h - 1, w], 16)
-
-            if transitions[::4].count('1') >= 1:
-                neighbors.append(north_neighbor)
-            elif north_transitions[2::4].count('1') >= 1:
-                neighbors.append(north_neighbor)
-
+        if h > 0 and transitions[0] == 1:
+            neighbors.append(((h - 1, w), 0))
         # move south
-        if h < self.env.rail.height - 1:
-            south_neighbor = (h + 1, w)
-            south_transitions = np.binary_repr(self.env.rail.grid[h + 1, w], 16)
-
-            if transitions[2::4].count('1') >= 1:
-                neighbors.append(south_neighbor)
-            elif south_transitions[::4].count('1') >= 1:
-                neighbors.append(south_neighbor)
-
+        if h < self.env.rail.height - 1 and transitions[2] == 1:
+            neighbors.append(((h + 1, w), 2))
         # move east
-        if w < self.env.rail.width - 1:
-            east_neighbor = (h, w + 1)
-            east_transitions = np.binary_repr(self.env.rail.grid[h, w + 1], 16)
-
-            if transitions[1::4].count('1') >= 1:
-                neighbors.append(east_neighbor)
-            elif east_transitions[3::4].count('1') >= 1:
-                neighbors.append(east_neighbor)
-
+        if w < self.env.rail.width - 1 and transitions[1] == 1:
+            neighbors.append(((h, w + 1), 1))
         # move west
-        if w > 0:  # move west
-            west_neighbor = (h, w - 1)
-            west_transitions = np.binary_repr(self.env.rail.grid[h, w - 1], 16)
-
-            if transitions[3::4].count('1') >= 1:
-                neighbors.append(west_neighbor)
-            elif west_transitions[1::4].count('1') >= 1:
-                neighbors.append(west_neighbor)
+        if w > 0 and transitions[3] == 1:  # move west
+            neighbors.append(((h, w - 1), 3))
 
         return neighbors
 
+    def get_all_states(self):
+        for h in range(self.env.height):
+            for w in range(self.env.width):
+                transitions = np.binary_repr(self.env.rail.grid[h, w], 16)
+                if transitions[:4].count('1') >= 1:
+                    self.all_states.add(((h, w), 0))
+                if transitions[4:8].count('1') >= 1:
+                    self.all_states.add(((h, w), 1))
+                if transitions[8:12].count('1') >= 1:
+                    self.all_states.add(((h, w), 2))
+                if transitions[12:].count('1') >= 1:
+                    self.all_states.add(((h, w), 3))
+
 
 if __name__ == '__main__':
-    env = RailEnv(width=8, height=8,
-                  number_of_agents=3,
-                  obs_builder_object=SimpleGraphObservation())
-
+    env = RailEnv(width=7, height=7, obs_builder_object=SimpleGraphObservation())
     obs = env.reset()
-    print(obs)
-    #obs, r, done, _ = env.step({0: 2})
-    #print(obs)
-    #obs, r, done, _ = env.step({0: 2})
-    #print(obs)
-
-    #env_renderer = RenderTool(env)
-    #env_renderer.render_env(show=True, frames=True, show_observations=False)
-    #input("Press Enter to continue...")
-
-    # while True:
-    #     action = int(input('Action:'))
-    #
-    #     env.step({0: action})
-    #     env_renderer.render_env(show=True, frames=True, show_observations=False)
