@@ -1,3 +1,0 @@
-"""
-Rollout a trained agent.
-"""
