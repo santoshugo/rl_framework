@@ -2,3 +2,5 @@ ray==1.1.0
 networkx==2.5
 numpy==1.19.5
 matplotlib==3.3.3
+pyyaml==5.4.1
+gym==0.14.0

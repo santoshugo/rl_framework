@@ -1,5 +1,3 @@
-from ._classes import AbstractAgent
+from ._classes import ManufacturingDispatchingEnv
 
-__all__ = [
-    "AbstractAgent"
-]
+__all__ = ["ManufacturingDispatchingEnv"]
