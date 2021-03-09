@@ -7,7 +7,7 @@ from ray.tune.logger import pretty_print
 from moirai.environment import ManufacturingDispatchingEnv
 
 DATA_FOLDER = join(dirname(realpath(__file__)), 'models')
-NUM_EPOCHS = 100
+NUM_EPOCHS = 10
 
 if __name__ == '__main__':
     ray.init()
