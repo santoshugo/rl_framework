@@ -2,7 +2,7 @@ from typing import List
 from collections import namedtuple
 
 from gym import Env
-from gym.spaces import MultiDiscrete, Discrete, Dict, Box, MultiBinary
+from gym.spaces import MultiDiscrete, Box
 import numpy as np
 
 Job = namedtuple('Task', ['length', 'slack', 'done'])
@@ -22,10 +22,7 @@ class ManufacturingDispatchingEnv(Env):
         np.random.seed(self.seed)
 
         self.action_space = MultiDiscrete([self.n_job_slots + 1] * self.time_steps)
-        self.observation_space = Dict({'machine_state': MultiBinary(self.time_steps),
-                                       'processing_time': Box(0, self.time_steps + 1, shape=(self.n_job_slots, ), dtype=np.int),
-                                       'backlog_state': Discrete(self.n_backlog_slots + 1),
-                                       'slack_state': Box(-200, self.time_steps * 2, shape=(self.n_job_slots, ), dtype=np.int)})
+        self.observation_space = Box(-200, 200, shape=(self.time_steps + self.n_job_slots + 1 + self.n_job_slots,), dtype=np.int)  # hardcoded lower/upper bounds for now
 
         self.null_action = self.n_job_slots
 
@@ -113,7 +110,7 @@ class ManufacturingDispatchingEnv(Env):
     def get_observation(self, action):
         machine_state = [1 if a != self.null_action else 0 for a in action]
         processing_time =[self.job_queue[i].length if self.job_queue[i] is not None else 0 for i in range(self.n_job_slots)]
-        backlog_state = len(self.backlog)
+        backlog_state = [len(self.backlog)]
         slack_state = list()
 
         for i in range(self.n_job_slots):
@@ -127,7 +124,7 @@ class ManufacturingDispatchingEnv(Env):
                 completion_date = len(action) - action[::-1].index(i)
                 slack_state.append(self.job_queue[i].slack - completion_date)
 
-        return {'machine_state': machine_state, 'processing_time': processing_time, 'backlog_state': backlog_state, 'slack_state': slack_state}
+        return np.array(machine_state + processing_time + backlog_state + slack_state)
 
     def lateness(self, completion_date: int, due_date: int) -> int:
         return abs(completion_date - due_date)
