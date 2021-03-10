@@ -12,34 +12,52 @@ FULL_BACKLOG_PENALTY = -10
 
 
 class ManufacturingDispatchingEnv(Env):
+    """
+    This class creates a manufacturing dispatching environment, Currently only one machine job is implemented
+    """
     def __init__(self, config):
+        """
+        time_steps:                 Number of time steps we should schedule for
+        n_job_slots:                Number of job slots
+        n_backlog_slots:            Number of backlog slots
+        metric:                     Metric to be optimized (lateness/tardiness)
+        max_steps_per_iterations:   Number of steps per iteration until the environment is reset
+        seed:                       Random seed
+
+        :param config: dictionary with env configurations
+        """
         self.time_steps = config.get('time_steps', 15)
-        self.slack_array = config.get('slack_array', 5)
         self.n_job_slots = config.get('n_job_slots', 10)
         self.n_backlog_slots = config.get('n_backlog_slots', 60)
-        self.seed = config.get('seed', 2)
         self.metric = config.get('metric', 'tardiness')
+        self.max_steps_per_iterations = config.get('max_steps_per_iterations', 100)
+        self.seed = config.get('seed', 2)
 
         assert self.metric in ['tardiness', 'lateness'], 'Acceptable metrics are lateness and tardiness'
-        self.max_steps_per_iterations = config.get('max_steps_per_iterations', 100)
-        self.rng = np.random.default_rng(self.seed)
+        assert self.max_steps_per_iterations > 0, 'Number of time steps per iteration should be greater than 0'
 
         self.action_space = MultiDiscrete([self.n_job_slots + 1] * self.time_steps)
         self.observation_space = Box(-200, 200, shape=(self.time_steps + self.n_job_slots + 1 + self.n_job_slots,), dtype=np.int)  # hardcoded lower/upper bounds for now
+
         self.reward_function = self.tardiness if self.metric == 'tardiness' else self.lateness
 
         self.null_action = self.n_job_slots
-
         self.current_job = None
 
         self.backlog = list()
         self.job_queue = {i: None for i in range(self.n_job_slots)}
         self.job_queue_empty_slots = set(list(range(self.n_job_slots)))
 
+        self.rng = np.random.default_rng(self.seed)
+
         self.i = 0
         self.job_id = 0
 
     def reset(self):
+        """
+        Resets environment to the initial state.
+        :return: observation
+        """
         self.current_job = self.null_action
 
         self.backlog = list()
@@ -52,6 +70,11 @@ class ManufacturingDispatchingEnv(Env):
         return self.get_observation([self.null_action] * self.time_steps)
 
     def step(self, action: list):
+        """
+        Receives an action and computes the transition to the next state
+        :param action: schedule for the next N time steps
+        :return: observation, reward, done, info
+        """
         r = 0  # add rewards later
         action = self.schedule_correction(action)  # assume that it is valid
         info = {'task_completed': False, 'lateness': None, 'tardiness': None}
@@ -121,9 +144,18 @@ class ManufacturingDispatchingEnv(Env):
         # check if done
         self.i += 1
         done = True if self.i >= self.max_steps_per_iterations else False
+
         return observation, r, done, info
 
     def get_observation(self, action):
+        """
+        Computes observation from environment state and received action.
+        State is a flattened array composed by:
+            - Machine state: List of length time_steps, 1 if machine is busy for that step otherwise 0
+            - Processing time: List of length n_job_queue with the length of each job
+            - Backlog state: List of length 1 with the number os jobs in backlog
+            - Slack state: List of length n_job_queue with the slack of each job if it was started right now
+        """
         machine_state = [1 if a != self.null_action else 0 for a in action]
         processing_time =[self.job_queue[i].length if self.job_queue[i] is not None else 0 for i in range(self.n_job_slots)]
         backlog_state = [len(self.backlog)]
@@ -143,15 +175,26 @@ class ManufacturingDispatchingEnv(Env):
         return np.array(machine_state + processing_time + backlog_state + slack_state)
 
     def lateness(self, completion_date: int, due_date: int) -> int:
+        """
+        Implements lateness metric
+        """
         return abs(completion_date - due_date)
 
     def tardiness(self, completion_date: int, due_date: int) -> int:
+        """
+        Implements tardiness metric
+        """
         return max(completion_date - due_date, 0)
 
     def schedule_correction(self, action: List) -> List:
+        """
+        Corrects the schedule (action) received to a valid one that can be used by the environment
+        :param action: input schedule
+        :return: valid schedule
+        """
         corrected_action = []
 
-        if self.current_job != self.null_action:
+        if self.current_job != self.null_action:  # If a job is already started it must be finished before another one is started
             corrected_action += [self.current_job] * (self.job_queue[self.current_job].length - self.job_queue[self.current_job].length)
 
         i = len(corrected_action)
@@ -163,7 +206,7 @@ class ManufacturingDispatchingEnv(Env):
             elif j in self.job_queue_empty_slots:  # case where action is invalid
                 corrected_action.append(self.null_action)
                 i += 1
-            elif j not in self.job_queue_empty_slots and j not in corrected_action:
+            elif j not in self.job_queue_empty_slots and j not in corrected_action: # case where action is valid, so a new job is added with the correct length
                 time_steps = min(self.job_queue[j].length, self.time_steps - i)
                 corrected_action += [j] * time_steps
                 i += time_steps
@@ -174,8 +217,16 @@ class ManufacturingDispatchingEnv(Env):
         return corrected_action
 
     def create_job(self, arrival_speed=0.5, p_small=0.8, p_urgent=0.5):
+        """
+        Dynamically creates a new job
+
+        :param arrival_speed: Probability of new job being created
+        :param p_small: probability of the job having a small length
+        :param p_urgent: probability of the job having low slack
+        :return: new job or None
+        """
         if self.rng.random() > arrival_speed:
-            return None
+            return None  # if no new job is created returns None
 
         if self.rng.random() <= p_small:
             length = self.rng.integers(1, 3)
