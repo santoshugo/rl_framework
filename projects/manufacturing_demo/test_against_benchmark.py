@@ -1,62 +1,99 @@
 import ray
 from ray.rllib.agents import ppo
-from rollout import load_ppo_agent, rollout
-from moirai.environment import ManufacturingDispatchingEnv
 import numpy as np
 
+from moirai.environment.manufacturing import SingleMachineEnv, JobParams
+from rollout import load_ppo_agent, rollout
 
-def least_slack_first(job_queue, time_steps, null_action):
+
+def minimum_first(environment, param):
+    job_queue = environment.job_queue
+    schedule_length = environment.schedule_length
+    null_action = environment.null_action
+
     schedule = []
-    job_queue = {key: item for key, item in job_queue.items() if item is not None}
-    sorted_jobs = sorted(job_queue, key=lambda job_id: job_queue[job_id].slack)
+    job_queue = {key: item for key, item in enumerate(job_queue) if item is not None}
+    sorted_jobs = sorted(job_queue, key=lambda job_id: getattr(job_queue[job_id], param))
 
-    while len(schedule) < time_steps:
+    while len(schedule) < schedule_length:
         try:
             job = sorted_jobs.pop(0)
-            schedule.extend([job] * (job_queue[job].length - job_queue[job].done))
+            schedule.extend([job] * (job_queue[job].processing_time - job_queue[job].done))
         except IndexError:
             schedule.append(null_action)
 
-    return schedule[:time_steps]
+    return schedule[:schedule_length]
+
+
+def minimum_slack_first(environment):
+    return minimum_first(environment, 'slack')
+
+
+def earliest_due_date_first(environment):
+    return minimum_first(environment, 'due_date')
+
+
+def earliest_release_date_first(environment):
+    return minimum_first(environment, 'due_date')
+
+
+def shortest_processing_time_first(environment):
+    return minimum_first(environment, 'processing_time')
 
 
 if __name__ == '__main__':
     ray.init()
-    ray.tune.register_env('ManufacturingDispatchingEnv', lambda config: ManufacturingDispatchingEnv(config))
+    ray.tune.register_env('SingleMachineEnv', lambda c: SingleMachineEnv(c))
 
-    agent = load_ppo_agent(ManufacturingDispatchingEnv,
-                           ppo.DEFAULT_CONFIG.copy(),
+    agent_config = ppo.DEFAULT_CONFIG.copy()
+    agent_config['train_batch_size'] = 500
+    agent_config['vf_clip_param'] = 400
+
+    agent_config['env_config'] = {'schedule_length': 14,
+                                  'max_job_slots': 100,
+                                  'jobs': [JobParams(r_probability=0.15, p={'a': 1, 'b': 3}, d={'a': 3, 'b': 6}),
+                                           JobParams(r_probability=0.15, p={'a': 5, 'b': 10}, d={'a': 6, 'b': 11})],
+                                  'seed': 99}
+
+    agent = load_ppo_agent(SingleMachineEnv,
+                           agent_config,
                            'C:\\Users\\santo\\rl_framework\\projects\\manufacturing_demo\\models\\checkpoint_500\\checkpoint-500')
 
-    env_lsf = ManufacturingDispatchingEnv({})
-    env_rl = ManufacturingDispatchingEnv({})
+    benchmarks = {'minimum_slack_first': minimum_slack_first,
+                  'earliest_due_date_first': earliest_due_date_first,
+                  'earliest_release_date_first': earliest_release_date_first,
+                  'shortest_processing_time_first': shortest_processing_time_first}
 
-    _ = env_lsf.reset()
-    obs = env_rl.reset()
+    env_dict = {'rl': SingleMachineEnv(agent_config['env_config'])}
+    obs = env_dict['rl'].reset()
+    tasks_completed_dict = {'rl': 0}
+    tardiness_dict = {'rl':  list()}
 
-    tasks_completed_lsf = 0
-    tasks_completed_rl = 0
-    tardiness_lsf = []
-    tardiness_rl = []
+    for benchmark in benchmarks.keys():
+        env_dict[benchmark] = SingleMachineEnv(agent_config['env_config'])
+        _ = env_dict[benchmark].reset()
+
+        tasks_completed_dict[benchmark] = 0
+        tardiness_dict[benchmark] = list()
 
     for i in range(100):
-        schedule_lsf = least_slack_first(env_lsf.job_queue, env_lsf.time_steps, env_lsf.null_action)
         action = rollout(agent, obs)
+        obs, _, _, info = env_dict['rl'].step(action)
 
-        _, _, _, info_lsf = env_lsf.step(schedule_lsf)
-        obs, _, _, info_rl = env_rl.step(action)
+        if info['task_completed']:
+            tasks_completed_dict['rl'] += 1
+            tardiness_dict['rl'].append(info['tardiness'])
 
-        if info_lsf['task_completed']:
-            tasks_completed_lsf += 1
-            tardiness_lsf.append(info_lsf['tardiness'])
+        for key, func in benchmarks.items():
+            schedule = func(env_dict[key])
+            _, _, _, info = env_dict[key].step(schedule)
 
-        if info_rl['task_completed']:
-            tasks_completed_rl += 1
-            tardiness_rl.append(info_rl['tardiness'])
+            if info['task_completed']:
+                tasks_completed_dict[key] += 1
+                tardiness_dict[key].append(info['tardiness'])
 
-    print('least slack first | completed tasks - ', tasks_completed_lsf)
-    print('least slack first | mean tardiness - ', np.mean(tardiness_lsf))
-
-    print('RL | completed tasks - ', tasks_completed_rl)
-    print('RL | mean tardiness - ', np.mean(tardiness_rl))
+    for key in tasks_completed_dict.keys():
+        print('{} | completed tasks - {}'.format(key, tasks_completed_dict[key]))
+        print('{} | tardiness - {}'.format(key, np.mean(tardiness_dict[key])))
+        print('\n')
 
